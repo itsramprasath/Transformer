@@ -11,9 +11,8 @@ google-api-python-client==2.120.0
 pandas==2.2.3
 jupyterlab
 ipywidgets
---only-binary=scipy,numpy
-scipy
-numpy
+scipy==1.11.4
+numpy==1.24.3
 scikit-learn
 matplotlib
 gensim
