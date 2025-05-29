@@ -81,7 +81,7 @@ def get_google_credentials():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file('/etc/secrets/credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
         with open('token_sheets.pickle', 'wb') as token:
             pickle.dump(creds, token)
@@ -121,7 +121,6 @@ def create_sheet(sheet_service, spreadsheet_id: str, sheet_name: str) -> bool:
                 }
             }
         }
-
         body = {'requests': [request]}
         sheet_service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
@@ -131,14 +130,12 @@ def create_sheet(sheet_service, spreadsheet_id: str, sheet_name: str) -> bool:
         # Add headers
         values = [['Timestamp', 'Client', 'Message', 'Reply 1', 'Reply 2', 'Final Reply', 'Summarized Reply']]
         body = {'values': values}
-
         sheet_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
             range=f"{sheet_name}!A1:G1",
             valueInputOption='RAW',
             body=body
         ).execute()
-
         return True
     except Exception as e:
         print(f"Error creating sheet: {e}")
@@ -159,21 +156,17 @@ def save_to_sheets(sheet_service, client_name: str, message: str, reply: str, su
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         values = [[timestamp, client_name, message, "", "", reply, summary]]
-        
         result = sheet_service.spreadsheets().values().get(
             spreadsheetId=SPREADSHEET_ID,
             range=f"{client_name}!A:A"
         ).execute()
-
         next_row = len(result.get('values', [])) + 1
-
         sheet_service.spreadsheets().values().update(
             spreadsheetId=SPREADSHEET_ID,
             range=f"{client_name}!A{next_row}:G{next_row}",
             valueInputOption='RAW',
             body={'values': values}
         ).execute()
-
         return True
     except Exception as e:
         print(f"Error saving to sheets: {e}")
@@ -184,17 +177,23 @@ def save_to_docs(docs_service, drive_service, client_name: str, content: str) ->
     try:
         # Create a new document
         doc_title = f"{client_name}_conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        document = {'title': doc_title}
+        document = {
+            'title': doc_title
+        }
         doc = docs_service.documents().create(body=document).execute()
         doc_id = doc.get('documentId')
 
         # Insert the content
-        requests = [{
-            'insertText': {
-                'location': {'index': 1},
-                'text': content
+        requests = [
+            {
+                'insertText': {
+                    'location': {
+                        'index': 1
+                    },
+                    'text': content
+                }
             }
-        }]
+        ]
         docs_service.documents().batchUpdate(
             documentId=doc_id,
             body={'requests': requests}
@@ -202,7 +201,6 @@ def save_to_docs(docs_service, drive_service, client_name: str, content: str) ->
 
         # Get the document URL
         doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
-
         return {
             "status": "success",
             "document_id": doc_id,
@@ -220,7 +218,6 @@ def summarize_message(message: str) -> str:
     try:
         if not message:
             return ""
-            
         response = client.chat.completions.create(
             model=MODEL,
             messages=[
@@ -238,29 +235,22 @@ def chat_with_openai(message: str, history: List[tuple]) -> str:
     """Chat function for OpenAI API with conversation history"""
     try:
         formatted_messages = [{"role": "system", "content": system_message}]
-        
         for msg, response in history:
             formatted_messages.extend([
                 {"role": "user", "content": msg},
                 {"role": "assistant", "content": response}
             ])
-        
         formatted_messages.append({"role": "user", "content": message})
-        
         response = client.chat.completions.create(
             model=MODEL,
             messages=formatted_messages,
             temperature=0.7,
             max_tokens=1000
         )
-
         response_text = response.choices[0].message.content
-        
         if "Reply 1:" not in response_text:
             response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
-
         return response_text
-
     except Exception as e:
         print(f"Error in chat_with_openai: {e}")
         return f"Error: {str(e)}"
@@ -269,17 +259,14 @@ def chat_with_claude(message: str, history: List[tuple]) -> str:
     """Chat function for Claude API with conversation history"""
     try:
         formatted_messages = []
-
         # Add conversation history
         for msg, response in history:
             formatted_messages.extend([
                 {"role": "user", "content": msg},
                 {"role": "assistant", "content": response}
             ])
-
         # Add current message
         formatted_messages.append({"role": "user", "content": message})
-        
         # Create the chat completion
         response = claude.messages.create(
             model="claude-3-opus-20240229",
@@ -287,15 +274,11 @@ def chat_with_claude(message: str, history: List[tuple]) -> str:
             system=system_message,
             max_tokens=1000
         )
-
         response_text = response.content[0].text
-        
         # Ensure response has both replies
         if "Reply 1:" not in response_text:
             response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
-
         return response_text
-
     except Exception as e:
         print(f"Error in chat_with_claude: {e}")
         return f"Error: {str(e)}"
@@ -319,4 +302,4 @@ def parse_replies(response_text: str) -> Tuple[str, str]:
         return response_text, ""
     except Exception as e:
         print(f"Error parsing replies: {e}")
-        return response_text, "" 
+        return response_text, ""

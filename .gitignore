@@ -1,0 +1,20 @@
+# Credentials and tokens
+token*.pickle
+*.pickle
+
+# Cache directories
+__pycache__/
+.conda/
+.gradio/
+checkpoint/
+not_focus/
+
+# Jupyter notebooks
+*.ipynb
+
+# Environment
+.env
+
+# System files
+.DS_Store
+Thumbs.db 
