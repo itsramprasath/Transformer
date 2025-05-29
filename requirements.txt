@@ -1,3 +1,4 @@
+streamlit==1.31.0
 python-dotenv==1.1.0
 requests==2.32.3
 beautifulsoup4==4.13.4
@@ -8,10 +9,10 @@ google-auth==2.40.1
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 google-api-python-client==2.120.0
-pandas==2.2.3
+pandas==2.0.3
 jupyterlab
 ipywidgets
-numpy
+numpy==1.24.3
 scipy
 scikit-learn
 matplotlib
@@ -29,7 +30,7 @@ langchain[docarray]
 datasets
 sentencepiece
 matplotlib
-google-generativeai
+google-generativeai==0.8.5
 chromadb
 plotly
 jupyter-dash
