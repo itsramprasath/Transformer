@@ -175,29 +175,29 @@ def save_to_sheets(sheet_service, client_name: str, message: str, reply: str, su
 def save_to_docs(docs_service, drive_service, client_name: str, content: str) -> Dict[str, str]:
     """Save content to a new Google Doc and return its URL"""
     try:
-        # Create a new document
+            # Create a new document
         doc_title = f"{client_name}_conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        document = {
+            document = {
             'title': doc_title
-        }
-        doc = docs_service.documents().create(body=document).execute()
+            }
+            doc = docs_service.documents().create(body=document).execute()
         doc_id = doc.get('documentId')
 
         # Insert the content
-        requests = [
-            {
-                'insertText': {
-                    'location': {
+            requests = [
+                {
+                    'insertText': {
+                        'location': {
                         'index': 1
-                    },
+                        },
                     'text': content
+                    }
                 }
-            }
-        ]
-        docs_service.documents().batchUpdate(
+            ]
+            docs_service.documents().batchUpdate(
             documentId=doc_id,
-            body={'requests': requests}
-        ).execute()
+                body={'requests': requests}
+            ).execute()
 
         # Get the document URL
         doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
@@ -209,7 +209,7 @@ def save_to_docs(docs_service, drive_service, client_name: str, content: str) ->
         }
     except Exception as e:
         return {
-            "status": "error",
+            "status": "error", 
             "message": str(e)
         }
 
@@ -227,7 +227,7 @@ def summarize_message(message: str) -> str:
             max_tokens=100
         )
         return response.choices[0].message.content
-    except Exception as e:
+                except Exception as e:
         print(f"Error summarizing message: {e}")
         return "Error creating summary"
 
@@ -241,16 +241,16 @@ def chat_with_openai(message: str, history: List[tuple]) -> str:
                 {"role": "assistant", "content": response}
             ])
         formatted_messages.append({"role": "user", "content": message})
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=formatted_messages,
-            temperature=0.7,
-            max_tokens=1000
-        )
-        response_text = response.choices[0].message.content
-        if "Reply 1:" not in response_text:
-            response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
-        return response_text
+                response = client.chat.completions.create(
+                    model=MODEL,
+                    messages=formatted_messages,
+                    temperature=0.7,
+                    max_tokens=1000
+                )
+                response_text = response.choices[0].message.content
+                if "Reply 1:" not in response_text:
+                    response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
+                return response_text
     except Exception as e:
         print(f"Error in chat_with_openai: {e}")
         return f"Error: {str(e)}"
@@ -268,17 +268,17 @@ def chat_with_claude(message: str, history: List[tuple]) -> str:
         # Add current message
         formatted_messages.append({"role": "user", "content": message})
         # Create the chat completion
-        response = claude.messages.create(
+                response = claude.messages.create(
             model="claude-3-opus-20240229",
-            messages=formatted_messages,
+                    messages=formatted_messages,
             system=system_message,
             max_tokens=1000
-        )
-        response_text = response.content[0].text
+                )
+                response_text = response.content[0].text
         # Ensure response has both replies
-        if "Reply 1:" not in response_text:
-            response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
-        return response_text
+                if "Reply 1:" not in response_text:
+                    response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
+                return response_text
     except Exception as e:
         print(f"Error in chat_with_claude: {e}")
         return f"Error: {str(e)}"
