@@ -33,20 +33,52 @@ __all__ = [
 ]
 
 def get_google_credentials():
-    """Get and cache credentials for Google Sheets API."""
+    """Get and cache credentials for Google APIs."""
     creds = None
-    if os.path.exists('token_sheets.pickle'):
-        with open('token_sheets.pickle', 'rb') as token:
-            creds = pickle.load(token)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file('/etc/secrets/credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open('token_sheets.pickle', 'wb') as token:
-            pickle.dump(creds, token)
-    return creds
+    
+    # First, try to use service account if we're in production
+    try:
+        from google.oauth2 import service_account
+        if os.path.exists('/etc/secrets/credentials.json'):
+            creds = service_account.Credentials.from_service_account_file(
+                '/etc/secrets/credentials.json',
+                scopes=SCOPES
+            )
+            print("Using service account authentication")
+            return creds
+    except Exception as e:
+        print(f"Service account auth failed, falling back to OAuth: {e}")
+    
+    # If service account fails or we're in development, try OAuth flow
+    try:
+        if os.path.exists('token_sheets.pickle'):
+            with open('token_sheets.pickle', 'rb') as token:
+                creds = pickle.load(token)
+                
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                # Try local credentials.json first
+                cred_file = 'credentials.json'
+                if not os.path.exists(cred_file):
+                    cred_file = '/etc/secrets/credentials.json'
+                
+                flow = InstalledAppFlow.from_client_secrets_file(cred_file, SCOPES)
+                try:
+                    creds = flow.run_local_server(port=0)
+                except Exception as e:
+                    # If browser auth fails, try console auth
+                    print(f"Browser auth failed, trying console: {e}")
+                    creds = flow.run_console()
+                    
+            with open('token_sheets.pickle', 'wb') as token:
+                pickle.dump(creds, token)
+                
+        return creds
+    except Exception as e:
+        print(f"OAuth authentication failed: {e}")
+        raise
 
 def get_sheet_service():
     """Get Google Sheets API service."""
