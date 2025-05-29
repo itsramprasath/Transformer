@@ -53,14 +53,6 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive'
 ]
 
-# System message for AI models
-# system_message = """You are Fred, a 51-year-old American businessman. Always format your responses exactly as 'Reply 1: [content] Reply 2: [content]'."""
-# system_message += """Your Role: You are a 51-year-old American businessman named Fred (full name: Frederick Allen Hampton) from Nashville, Tennessee, who has successfully run a family business specializing in tiles, marbles, and stones for years across the US and UK."""
-# system_message += """Your dad is half Irish and half English, and your mom is from Nashville. Your dad founded Allen Marbles in the UK, and he fell in love with your mom during a business trip to Nashville."""
-# system_message += """After his retirement, you took over the company and grew it to a successful business. Now you are tired of managing transatlantic operations and want to settle down."""
-# system_message += """Your personality is confident, romantic, and active. You enjoy playing tennis 🎾, appreciating fine wine 🍷 and jazz 🎶, and are adaptable to new environments."""
-# system_message += """CRITICAL: Always format your responses with exactly two replies as 'Reply 1: [first response] Reply 2: [second response]'. Never deviate from this format."""
-
 system_message = """You are Fred, a helpful AI assistant. Always format your responses exactly as 'Reply 1: [content] Reply 2: [content]'."""
 system_message += """Your Role: You are a 51-year-old American businessman named Fred (full name: Frederick Allen Hampton) from Nashville, Tennessee, who has successfully run a family business specializing in tiles, marbles, and stones for years across the US and UK."""
 system_message += """Your dad is half Irish and half English, and your mom is from Nashville. Your dad founded Allen Marbles in the UK, and he fell in love with your mom during a business trip to Nashville."""
@@ -78,7 +70,6 @@ system_message += """Your primary goal is to find a compatible partner who share
 system_message += """When you talk to ladies, give them the precise answer about her questions and keep it short, no over-explanations, no need to introduce until she asks about you. Keep it like a conversation between two humans, very natural."""
 system_message += """IMPORTANT: You must remember and refer to any details that users have shared with you previously (like their name, preferences, pets, etc). For example, if a user mentioned they have a dog named Max in a previous conversation, you should remember this and refer to it if relevant."""
 system_message += """CRITICAL: Always format your responses with exactly two replies as 'Reply 1: [first response] Reply 2: [second response]'. Never deviate from this format."""
-
 
 def get_google_credentials():
     """Get and cache credentials for Google Sheets API."""
@@ -191,29 +182,23 @@ def save_to_sheets(sheet_service, client_name: str, message: str, reply: str, su
 def save_to_docs(docs_service, drive_service, client_name: str, content: str) -> Dict[str, str]:
     """Save content to a new Google Doc and return its URL"""
     try:
-            # Create a new document
+        # Create a new document
         doc_title = f"{client_name}_conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            document = {
-            'title': doc_title
-            }
-            doc = docs_service.documents().create(body=document).execute()
+        document = {'title': doc_title}
+        doc = docs_service.documents().create(body=document).execute()
         doc_id = doc.get('documentId')
 
         # Insert the content
-            requests = [
-                {
-                    'insertText': {
-                        'location': {
-                        'index': 1
-                        },
-                    'text': content
-                    }
-                }
-            ]
-            docs_service.documents().batchUpdate(
+        requests = [{
+            'insertText': {
+                'location': {'index': 1},
+                'text': content
+            }
+        }]
+        docs_service.documents().batchUpdate(
             documentId=doc_id,
-                body={'requests': requests}
-            ).execute()
+            body={'requests': requests}
+        ).execute()
 
         # Get the document URL
         doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
@@ -226,7 +211,7 @@ def save_to_docs(docs_service, drive_service, client_name: str, content: str) ->
         }
     except Exception as e:
         return {
-            "status": "error", 
+            "status": "error",
             "message": str(e)
         }
 
@@ -245,7 +230,7 @@ def summarize_message(message: str) -> str:
             max_tokens=100
         )
         return response.choices[0].message.content
-                except Exception as e:
+    except Exception as e:
         print(f"Error summarizing message: {e}")
         return "Error creating summary"
 
@@ -261,20 +246,20 @@ def chat_with_openai(message: str, history: List[tuple]) -> str:
             ])
         
         formatted_messages.append({"role": "user", "content": message})
-                
-                response = client.chat.completions.create(
-                    model=MODEL,
-                    messages=formatted_messages,
-                    temperature=0.7,
-                    max_tokens=1000
-                )
+        
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=formatted_messages,
+            temperature=0.7,
+            max_tokens=1000
+        )
 
-                response_text = response.choices[0].message.content
-                
-                if "Reply 1:" not in response_text:
-                    response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
+        response_text = response.choices[0].message.content
+        
+        if "Reply 1:" not in response_text:
+            response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
 
-                return response_text
+        return response_text
 
     except Exception as e:
         print(f"Error in chat_with_openai: {e}")
@@ -296,20 +281,20 @@ def chat_with_claude(message: str, history: List[tuple]) -> str:
         formatted_messages.append({"role": "user", "content": message})
         
         # Create the chat completion
-                response = claude.messages.create(
+        response = claude.messages.create(
             model="claude-3-opus-20240229",
-                    messages=formatted_messages,
+            messages=formatted_messages,
             system=system_message,
             max_tokens=1000
-                )
+        )
 
-                response_text = response.content[0].text
-                
+        response_text = response.content[0].text
+        
         # Ensure response has both replies
-                if "Reply 1:" not in response_text:
-                    response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
+        if "Reply 1:" not in response_text:
+            response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
 
-                return response_text
+        return response_text
 
     except Exception as e:
         print(f"Error in chat_with_claude: {e}")
