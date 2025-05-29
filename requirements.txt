@@ -12,6 +12,8 @@ pandas==2.2.3
 jupyterlab
 ipywidgets
 numpy
+--only-binary=scipy
+scipy
 scipy
 scikit-learn
 matplotlib
