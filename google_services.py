@@ -4,9 +4,7 @@ from datetime import datetime
 import pickle
 import google.auth
 from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -33,51 +31,31 @@ __all__ = [
 ]
 
 def get_google_credentials():
-    """Get and cache credentials for Google APIs."""
-    creds = None
-    
-    # First, try to use service account if we're in production
+    """Get credentials for Google APIs using service account."""
     try:
-        from google.oauth2 import service_account
-        if os.path.exists('/etc/secrets/credentials.json'):
-            creds = service_account.Credentials.from_service_account_file(
-                '/etc/secrets/credentials.json',
-                scopes=SCOPES
-            )
-            print("Using service account authentication")
-            return creds
-    except Exception as e:
-        print(f"Service account auth failed, falling back to OAuth: {e}")
-    
-    # If service account fails or we're in development, try OAuth flow
-    try:
-        if os.path.exists('token_sheets.pickle'):
-            with open('token_sheets.pickle', 'rb') as token:
-                creds = pickle.load(token)
-                
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                # Try local credentials.json first
-                cred_file = 'credentials.json'
-                if not os.path.exists(cred_file):
-                    cred_file = '/etc/secrets/credentials.json'
-                
-                flow = InstalledAppFlow.from_client_secrets_file(cred_file, SCOPES)
+        # Check multiple possible locations for the credentials file
+        cred_paths = [
+            'credentials.json',  # Local development
+            '/etc/secrets/credentials.json',  # Traditional path
+            '/opt/render/project/src/credentials.json'  # Render's typical path
+        ]
+        
+        for cred_path in cred_paths:
+            if os.path.exists(cred_path):
                 try:
-                    creds = flow.run_local_server(port=0)
+                    creds = service_account.Credentials.from_service_account_file(
+                        cred_path,
+                        scopes=SCOPES
+                    )
+                    print(f"Using service account credentials from {cred_path}")
+                    return creds
                 except Exception as e:
-                    # If browser auth fails, try console auth
-                    print(f"Browser auth failed, trying console: {e}")
-                    creds = flow.run_console()
-                    
-            with open('token_sheets.pickle', 'wb') as token:
-                pickle.dump(creds, token)
-                
-        return creds
+                    print(f"Failed to load credentials from {cred_path}: {e}")
+                    continue
+        
+        raise FileNotFoundError("Could not find valid credentials file in any location")
     except Exception as e:
-        print(f"OAuth authentication failed: {e}")
+        print(f"Error in get_google_credentials: {e}")
         raise
 
 def get_sheet_service():
