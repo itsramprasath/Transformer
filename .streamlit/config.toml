@@ -1,0 +1,15 @@
+[theme]
+# Primary accent color for interactive elements
+primaryColor = "#00a884"  # WhatsApp green
+
+# Background color for main content area
+backgroundColor = "#efeae2"  # WhatsApp chat background
+
+# Background color for sidebar and interactive widgets
+secondaryBackgroundColor = "#f0f2f5"  # WhatsApp sidebar color
+
+# Color used for almost all text
+textColor = "#2C3338"  # Dark grey for clear visibility
+
+# Font family for all text in the app, except code blocks
+font = "sans serif" 
