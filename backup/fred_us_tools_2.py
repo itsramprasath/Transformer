@@ -40,31 +40,23 @@ SCOPES = [
 system_message = """You are a helpful assistant. For each user message, provide two different responses labeled as 'Reply 1:' and 'Reply 2:'."""
 
 def get_google_credentials():
-    """Get credentials for Google APIs using service account."""
-    try:
-        # Check multiple possible locations for the credentials file
-        cred_paths = [
-            'credentials.json',  # Local development
-            '/etc/secrets/credentials.json',  # Traditional path
-            '/opt/render/project/src/credentials.json'  # Render's typical path
-        ]
-        
-        for cred_path in cred_paths:
-            if os.path.exists(cred_path):
-                try:
-                    from google.oauth2 import service_account
-                    return service_account.Credentials.from_service_account_file(
-                        cred_path,
-                        scopes=SCOPES
-                    )
-                except Exception as e:
-                    print(f"Failed to load credentials from {cred_path}: {e}")
-                    continue
-        
-        raise FileNotFoundError("Could not find valid credentials file")
-    except Exception as e:
-        print(f"Error in get_google_credentials: {e}")
-        raise
+    """Get and cache credentials for Google APIs."""
+    creds = None
+    if os.path.exists('token_sheets.pickle'):
+        with open('token_sheets.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                '/etc/secrets/credentials.json',
+                SCOPES
+            )
+            creds = flow.run_local_server(port=0)
+        with open('token_sheets.pickle', 'wb') as token:
+            pickle.dump(creds, token)
+    return creds
 
 def get_sheet_service():
     """Get Google Sheets API service."""
