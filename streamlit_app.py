@@ -117,87 +117,86 @@ def cleanup_old_sessions():
 
 @timeout_decorator(20)
 def load_chat_history(client_name):
-    """Load chat history with optimized memory usage"""
+    """Load chat history from Google Sheets"""
     try:
-        cleanup_old_sessions()
-        
-        if not check_memory_usage():
-            return []
-            
         sheet_service = get_cached_sheet_service()
-        
-        # Use more aggressive chunking
-        chunk_size = 10  # Smaller chunks
         result = sheet_service.spreadsheets().values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{client_name}!A:G",
-            valueRenderOption='UNFORMATTED_VALUE',
-            dateTimeRenderOption='FORMATTED_STRING',
-            timeout=15  # Shorter timeout
+            range=f"{client_name}!A:G"
         ).execute()
         
         values = result.get('values', [])
         if not values:
             return []
             
-        # More aggressive history limitation
+        # Process only last 20 messages for performance
         chat_history = []
-        total_messages = min(len(values[1:]), 30)  # Only last 30 messages
-        
-        for i in range(0, total_messages, chunk_size):
-            if not check_memory_usage():
-                break
+        for row in values[-20:]:  # Get last 20 messages
+            if len(row) >= 7:
+                chat_history.append({
+                    "timestamp": row[0],
+                    "session_id": row[1] if len(row) > 1 else "",
+                    "user_message": row[2],
+                    "reply1": row[3] if len(row) > 3 else "",
+                    "reply2": row[4] if len(row) > 4 else "",
+                    "bot_reply": row[5],
+                    "summary": row[6]
+                })
                 
-            chunk = values[1:][i:i + chunk_size]
-            for row in chunk:
-                if len(row) >= 7:
-                    chat_history.append({
-                        "timestamp": row[0],
-                        "user_message": row[2],
-                        "bot_reply": row[5],
-                        "summary": row[6]
-                    })
-            
-            # More frequent yields
-            time.sleep(0.2)
-            
-        return chat_history[-20:]  # Return only last 20 messages
-        
+        return chat_history
     except Exception as e:
-        logger.error(f"Error loading chat history: {e}")
-        cleanup_old_sessions()
+        st.error(f"Error loading chat history: {e}")
         return []
 
-@timeout_decorator(20)
-def get_conversation_context(chat_history, current_question):
-    """Create a context with memory management"""
+def save_interaction_to_sheets(sheet_service, client_name, interaction):
+    """Save interaction to sheets"""
     try:
-        if not chat_history:
-            return f"You are having a conversation with {st.session_state.client_name}."
+        row_data = [
+            interaction.get('timestamp', ''),
+            interaction.get('session_id', ''),
+            interaction.get('user_message', ''),
+            interaction.get('reply1', ''),
+            interaction.get('reply2', ''),
+            interaction.get('final_reply', ''),
+            interaction.get('summary', '')
+        ]
         
-        # Limit context window to prevent memory issues
-        recent_history = chat_history[-5:]  # Only use last 5 messages for context
-        context = f"You are having a conversation with {st.session_state.client_name}."
-        
-        for interaction in recent_history:
-            context += f"\nTime: {interaction['timestamp']}\n"
-            context += f"User: {interaction['user_message']}\n"
-            context += f"Your response: {interaction['bot_reply']}\n"
-            if interaction.get('summary'):
-                context += f"Summary: {interaction['summary']}\n"
-            context += "---\n"
-        
-        context += f"\nCurrent message: {current_question}\n"
-        return context
-        
+        # Append new row
+        sheet_service.spreadsheets().values().append(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{client_name}!A:G",
+            valueInputOption='RAW',
+            body={'values': [row_data]}
+        ).execute()
+            
+        return True
     except Exception as e:
-        st.error(f"Error creating context: {e}")
-        return f"You are having a conversation with {st.session_state.client_name}."
+        st.error(f"Error saving to sheets: {e}")
+        return False
+
+def get_conversation_context(chat_history, current_question):
+    """Create a context for the AI"""
+    if not chat_history:
+        return f"You are having a conversation with {st.session_state.client_name}. This is your first interaction."
+    
+    context = f"""You are having a conversation with {st.session_state.client_name}. 
+Maintain consistency with your previous responses.
+
+Recent conversation history:
+"""
+    
+    # Include last 5 interactions for context
+    recent_history = chat_history[-5:]
+    for interaction in recent_history:
+        context += f"\nUser: {interaction['user_message']}\n"
+        context += f"Assistant: {interaction['bot_reply']}\n"
+        context += "---\n"
+    
+    context += f"\nCurrent message: {current_question}\n"
+    return context
 
 def initialize_session_state():
-    """Initialize session state with cleanup"""
-    cleanup_old_sessions()  # Clean up old sessions first
-    
+    """Initialize session state"""
     defaults = {
         'session_id': str(uuid.uuid4()),
         'client_name': None,
@@ -205,120 +204,111 @@ def initialize_session_state():
         'current_question': None,
         'current_response': None,
         'model_choice': "openai",
-        'client_initialized': False,
-        'needs_update': False,
-        'last_cleanup': datetime.now()
+        'client_initialized': False
     }
     
     for key, default_value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = default_value
 
-    # Periodic cleanup (every 15 minutes)
-    if 'last_cleanup' in st.session_state:
-        if (datetime.now() - st.session_state.last_cleanup).total_seconds() > 900:
-            cleanup_old_sessions()
-            st.session_state.last_cleanup = datetime.now()
-
 @timeout_decorator(30)
 def handle_chat_input(prompt):
-    """Handle chat input with timeouts and error recovery"""
+    """Handle chat input"""
     if not prompt:
         return
         
+    st.session_state.current_question = prompt
+    context = get_conversation_context(st.session_state.chat_history, prompt)
+    
+    with st.spinner("Processing..."):
+        response = chat(context, [], st.session_state.model_choice)
+        
+    # Parse replies and save interaction
+    reply1, reply2 = parse_replies(response)
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    summary = summarize_message(response)
+    
+    new_interaction = {
+        "timestamp": current_time,
+        "session_id": st.session_state.session_id,
+        "user_message": prompt,
+        "bot_reply": response,
+        "reply1": reply1,
+        "reply2": reply2,
+        "final_reply": response,
+        "summary": summary
+    }
+    
+    st.session_state.chat_history.append(new_interaction)
+    st.session_state.current_response = response
+    
+    # Save to sheets
     try:
-        st.session_state.current_question = prompt
-        
-        # Get conversation context with timeout
-        context = get_conversation_context(st.session_state.chat_history[-5:], prompt)  # Only use last 5 messages
-        
-        with st.spinner("Processing..."):
-            # Add timeout to chat call
-            start_time = time.time()
-            response = chat(context, [], st.session_state.model_choice)
-            
-            if time.time() - start_time > 25:  # If taking too long
-                st.warning("Response took too long. Please try again.")
-                return
-        
-        # Save interaction with minimal data
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        summary = summarize_message(response)
-        
-        new_interaction = {
-            "timestamp": current_time,
-            "session_id": st.session_state.session_id,
-            "user_message": prompt,
-            "bot_reply": response,
-            "summary": summary
-        }
-        
-        # Maintain chat history size
-        st.session_state.chat_history = st.session_state.chat_history[-49:] + [new_interaction]
-        st.session_state.current_response = response
-        
-        # Save to sheets in background
-        try:
-            sheet_service = get_cached_sheet_service()
-            save_interaction_to_sheets(sheet_service, st.session_state.client_name, new_interaction)
-        except Exception as e:
-            st.error(f"Error saving to sheets: {e}")
-            
+        sheet_service = get_cached_sheet_service()
+        save_interaction_to_sheets(sheet_service, st.session_state.client_name, new_interaction)
     except Exception as e:
-        st.error(f"Error processing message: {e}")
-        cleanup_old_sessions()  # Clean up on error
+        st.error(f"Error saving to sheets: {e}")
 
 def render_chat_interface():
+    """Render chat interface"""
     if st.session_state.client_initialized:
         st.title(f"Conversation with {st.session_state.client_name}")
         
-        # Memory-efficient chat container
-        chat_container = st.empty()
+        # Chat input at the bottom
+        prompt = st.chat_input(
+            "Type your message here...",
+            key=f"chat_input_{st.session_state.session_id}"
+        )
         
-        # Chat input with memory check
-        if check_memory_usage():
-            prompt = st.chat_input(
-                "Type your message here...",
-                key=f"chat_input_{st.session_state.session_id}"
-            )
-            
-            if prompt:
-                if len(prompt) > 1000:  # Limit message size
-                    st.warning("Message too long. Please keep it under 1000 characters.")
-                    return
-                    
-                handle_chat_input(prompt)
+        if prompt:
+            handle_chat_input(prompt)
         
-        # Display chat with limited history
-        with chat_container.container():
-            # Show only last 5 messages for performance
-            recent_history = st.session_state.chat_history[-5:] if st.session_state.chat_history else []
+        # Display chat history
+        for interaction in st.session_state.chat_history[-10:]:  # Show last 10 messages
+            with st.chat_message("user"):
+                st.markdown(interaction['user_message'])
+            with st.chat_message("assistant"):
+                st.markdown(interaction['bot_reply'])
+        
+        # Show current interaction
+        if st.session_state.current_question:
+            with st.chat_message("user"):
+                st.markdown(st.session_state.current_question)
             
-            for interaction in recent_history:
-                with st.chat_message("user"):
-                    st.markdown(interaction['user_message'][:500])  # Limit displayed text
+            if st.session_state.current_response:
                 with st.chat_message("assistant"):
-                    st.markdown(interaction['bot_reply'][:1000])  # Limit displayed text
-            
-            if st.session_state.current_question:
-                with st.chat_message("user"):
-                    st.markdown(st.session_state.current_question[:500])
-                
-                if st.session_state.current_response:
-                    with st.chat_message("assistant"):
-                        st.markdown(st.session_state.current_response[:1000])
+                    st.markdown(st.session_state.current_response)
+                    
+                    # Add retry button
+                    col1, col2 = st.columns([0.1, 0.9])
+                    with col1:
+                        if st.button("🔄", key=f"retry_{st.session_state.session_id}"):
+                            context = get_conversation_context(
+                                st.session_state.chat_history[:-1], 
+                                st.session_state.current_question
+                            )
+                            new_response = chat(context, [], st.session_state.model_choice)
+                            
+                            # Update the last interaction
+                            reply1, reply2 = parse_replies(new_response)
+                            st.session_state.chat_history[-1].update({
+                                "bot_reply": new_response,
+                                "reply1": reply1,
+                                "reply2": reply2,
+                                "final_reply": new_response,
+                                "summary": summarize_message(new_response)
+                            })
+                            
+                            st.session_state.current_response = new_response
+                            st.rerun()
     else:
         st.title("Client Conversation Assistant")
         st.info("👈 Please select or enter a client name in the sidebar to start.")
 
 def main():
-    try:
-        initialize_session_state()
-        render_sidebar()
-        render_chat_interface()
-    except Exception as e:
-        st.error("An error occurred. Please refresh the page and try again.")
-        st.error(f"Error details: {e}")
+    initialize_session_state()
+    render_sidebar()
+    render_chat_interface()
 
 # Use container-level caching for smoother updates
 @st.cache_data(ttl=300)
@@ -358,14 +348,12 @@ def handle_start_conversation(client_name):
     
     # Load chat history from sheets
     st.session_state.chat_history = load_chat_history(client_name)
-    st.session_state.needs_update = True
 
 def handle_clear_chat():
     st.session_state.session_id = str(uuid.uuid4())
     st.session_state.chat_history = []
     st.session_state.current_response = None
     st.session_state.current_question = None
-    st.session_state.needs_update = True
 
 def handle_new_client():
     st.session_state.session_id = str(uuid.uuid4())
@@ -374,7 +362,6 @@ def handle_new_client():
     st.session_state.chat_history = []
     st.session_state.current_response = None
     st.session_state.current_question = None
-    st.session_state.needs_update = True
 
 def render_sidebar():
     with st.sidebar:
