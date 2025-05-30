@@ -28,9 +28,16 @@ client = None
 claude = None
 
 if openai_api_key:
-    client = OpenAI(api_key=openai_api_key)
+    try:
+        client = OpenAI(api_key=openai_api_key)
+    except Exception as e:
+        print(f"Error initializing OpenAI client: {e}")
+
 if anthropic_api_key:
-    claude = anthropic.Anthropic(api_key=anthropic_api_key)
+    try:
+        claude = anthropic.Anthropic(api_key=anthropic_api_key)
+    except Exception as e:
+        print(f"Error initializing Anthropic client: {e}")
 
 MODEL = 'gpt-4'
 
@@ -200,7 +207,7 @@ def save_to_docs(docs_service, drive_service, client_name: str, content: str) ->
 def summarize_message(message: str) -> str:
     """Create a brief summary of a message."""
     if not client:
-        return "Error: OpenAI API key not configured"
+        return "OpenAI API is not configured. Message summarization is unavailable."
     try:
         if not message:
             return ""
@@ -220,7 +227,7 @@ def summarize_message(message: str) -> str:
 def chat_with_openai(message: str, history: List[tuple]) -> str:
     """Chat function for OpenAI API with conversation history."""
     if not client:
-        return "Error: OpenAI API key not configured. Please set up your API key in Streamlit Cloud."
+        return "OpenAI API is not configured. Please set up your OPENAI_API_KEY in environment variables or Streamlit secrets."
     try:
         formatted_messages = [{"role": "system", "content": system_message}]
         for msg, response in history:
@@ -246,7 +253,7 @@ def chat_with_openai(message: str, history: List[tuple]) -> str:
 def chat_with_claude(message: str, history: List[tuple]) -> str:
     """Chat function for Claude API with conversation history."""
     if not claude:
-        return "Error: Anthropic API key not configured. Please set up your API key in Streamlit Cloud."
+        return "Claude API is not configured. Please set up your ANTHROPIC_API_KEY in environment variables or Streamlit secrets."
     try:
         formatted_messages = []
         # Add conversation history
