@@ -1,5 +1,17 @@
 # Streamlit Chat Application - Version 3.0 - Minimal Stable Build
 import streamlit as st
+import uuid
+import os
+import sys
+from pathlib import Path
+from datetime import datetime
+import gc  # For garbage collection
+import time
+import psutil
+import logging
+from functools import wraps
+import concurrent.futures
+from typing import Optional
 
 # Initialize all session state variables if they don't exist
 if 'initialized' not in st.session_state:
@@ -18,19 +30,6 @@ if 'current_response' not in st.session_state:
     st.session_state.current_response = None
 if 'model_choice' not in st.session_state:
     st.session_state.model_choice = "openai"
-
-import os
-import sys
-from pathlib import Path
-import uuid
-from datetime import datetime
-import gc  # For garbage collection
-import time
-import psutil
-import logging
-from functools import wraps
-import concurrent.futures
-from typing import Optional
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
