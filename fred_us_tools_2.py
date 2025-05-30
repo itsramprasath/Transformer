@@ -4,7 +4,6 @@
 import os
 import json
 import requests
-from bs4 import BeautifulSoup
 from typing import List, Dict, Any, Tuple
 from dotenv import load_dotenv
 from openai import OpenAI
