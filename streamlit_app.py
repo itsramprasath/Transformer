@@ -1,4 +1,4 @@
-# Streamlit Chat Application with Memory Management and Performance Optimizations
+# Streamlit Chat Application - Version 2.0 - Simplified for stability
 import streamlit as st
 import os
 import sys
