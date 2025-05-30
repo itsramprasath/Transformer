@@ -6,6 +6,8 @@ import google.auth
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from dotenv import load_dotenv
+import streamlit as st
+import json
 
 # Load environment variables
 load_dotenv(override=True)
@@ -33,7 +35,15 @@ __all__ = [
 def get_google_credentials():
     """Get credentials for Google APIs using service account."""
     try:
-        # Check multiple possible locations for the credentials file
+        # Try to get credentials from Streamlit secrets
+        if hasattr(st.secrets, "credentials_json"):
+            credentials_dict = json.loads(st.secrets.credentials_json)
+            return service_account.Credentials.from_service_account_info(
+                credentials_dict,
+                scopes=SCOPES
+            )
+            
+        # Fallback to file-based credentials for local development
         cred_paths = [
             'credentials.json',  # Local development
             '/etc/secrets/credentials.json',  # Traditional path
@@ -43,17 +53,15 @@ def get_google_credentials():
         for cred_path in cred_paths:
             if os.path.exists(cred_path):
                 try:
-                    creds = service_account.Credentials.from_service_account_file(
+                    return service_account.Credentials.from_service_account_file(
                         cred_path,
                         scopes=SCOPES
                     )
-                    print(f"Using service account credentials from {cred_path}")
-                    return creds
                 except Exception as e:
                     print(f"Failed to load credentials from {cred_path}: {e}")
                     continue
         
-        raise FileNotFoundError("Could not find valid credentials file in any location")
+        raise FileNotFoundError("Could not find valid credentials. Please configure credentials in Streamlit Cloud secrets or provide a credentials file.")
     except Exception as e:
         print(f"Error in get_google_credentials: {e}")
         raise
