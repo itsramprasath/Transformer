@@ -253,18 +253,27 @@ def render_chat_interface():
     if st.session_state.client_initialized:
         st.title(f"Conversation with {st.session_state.client_name}")
         
-        # Chat input
+        # Chat input at the bottom
         prompt = st.chat_input("Type your message here...")
+        
+        # Clear previous messages from display when new input is received
         if prompt:
+            # Clear any previous messages from session state
+            st.session_state.current_question = None
+            st.session_state.current_response = None
+            # Handle new input
             handle_chat_input(prompt)
         
-        # Only show current interaction
+        # Only show the most recent question and answer
         if st.session_state.current_question:
-            with st.chat_message("user"):
-                st.write(st.session_state.current_question)
-            if st.session_state.current_response:
-                with st.chat_message("assistant"):
-                    st.write(st.session_state.current_response)
+            # Container for current conversation
+            chat_container = st.container()
+            with chat_container:
+                with st.chat_message("user"):
+                    st.write(st.session_state.current_question)
+                if st.session_state.current_response:
+                    with st.chat_message("assistant"):
+                        st.write(st.session_state.current_response)
     else:
         st.title("Client Conversation Assistant")
         st.info("👈 Please select or enter a client name in the sidebar to start.")
