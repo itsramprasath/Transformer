@@ -49,18 +49,20 @@ def load_chat_history(client_name):
     """Load chat history from Google Sheets and format it for context"""
     try:
         sheet_service = get_sheet_service()
+        # Add timeout parameter to the request
         result = sheet_service.spreadsheets().values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{client_name}!A:G"
+            range=f"{client_name}!A:G",
+            timeout=30  # 30 second timeout
         ).execute()
         
         values = result.get('values', [])
         if not values:
             return []
             
-        # Skip header row
+        # Skip header row and limit history to last 50 messages to prevent overload
         chat_history = []
-        for row in values[1:]:
+        for row in values[-50:]:  # Only get last 50 messages
             if len(row) >= 7:  # Ensure row has all required columns
                 timestamp = row[0]  # Timestamp
                 message = row[2]    # Message column
@@ -78,6 +80,7 @@ def load_chat_history(client_name):
         return chat_history
     except Exception as e:
         st.error(f"Error loading chat history: {e}")
+        # Return empty list on error to allow app to continue
         return []
 
 def get_conversation_context(chat_history, current_question):
@@ -213,11 +216,30 @@ def render_chat_interface():
             "Type your message here...",
             key=f"chat_input_{st.session_state.session_id}"
         )
+        
+        # Add rate limiting
+        current_time = datetime.now()
+        last_message_time = st.session_state.get('last_message_time')
+        
         if prompt:
+            if last_message_time and (current_time - last_message_time).total_seconds() < 2:
+                st.warning("Please wait a moment before sending another message.")
+                return
+                
+            st.session_state.last_message_time = current_time
             handle_chat_input(prompt)
         
         # Display chat in the container
         with chat_container:
+            # Show only last 10 messages for performance
+            recent_history = st.session_state.chat_history[-10:] if st.session_state.chat_history else []
+            
+            for interaction in recent_history:
+                with st.chat_message("user"):
+                    st.markdown(interaction['user_message'])
+                with st.chat_message("assistant"):
+                    st.markdown(interaction['bot_reply'])
+            
             # Show current interaction
             if st.session_state.current_question:
                 with st.chat_message("user"):
@@ -225,14 +247,19 @@ def render_chat_interface():
                 
                 if st.session_state.current_response:
                     with st.chat_message("assistant"):
-                        # First show the response
                         st.markdown(st.session_state.current_response)
                         
-                        # Add retry button
+                        # Add retry button with rate limiting
                         col1, col2 = st.columns([0.1, 0.9])
                         with col1:
                             retry_key = f"retry_current_{st.session_state.session_id}"
                             if st.button("🔄", key=retry_key):
+                                last_retry_time = st.session_state.get('last_retry_time')
+                                if last_retry_time and (current_time - last_retry_time).total_seconds() < 5:
+                                    st.warning("Please wait a moment before retrying.")
+                                    return
+                                    
+                                st.session_state.last_retry_time = current_time
                                 # Regenerate response with full context
                                 context = get_conversation_context(
                                     st.session_state.chat_history[:-1], 
@@ -333,9 +360,13 @@ def render_chat_interface():
         st.info("👈 Please select or enter a client name in the sidebar to start.")
 
 def main():
-    initialize_session_state()
-    render_sidebar()
-    render_chat_interface()
+    try:
+        initialize_session_state()
+        render_sidebar()
+        render_chat_interface()
+    except Exception as e:
+        st.error("An error occurred. Please refresh the page and try again.")
+        st.error(f"Error details: {e}")
 
 # Use container-level caching for smoother updates
 @st.cache_data(ttl=300)
@@ -464,6 +495,11 @@ def render_sidebar():
         # Display session info
         st.markdown("---")
         st.caption(f"Session ID: {st.session_state.session_id}")
+
+# Add caching to get_sheet_service to prevent too many API calls
+@st.cache_resource(ttl=3600)  # Cache for 1 hour
+def get_cached_sheet_service():
+    return get_sheet_service()
 
 if __name__ == "__main__":
     main() 
