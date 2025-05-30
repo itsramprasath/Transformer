@@ -1,4 +1,4 @@
-# Streamlit Chat Application - Version 2.0 - Simplified for stability
+# Streamlit Chat Application - Version 3.0 - Minimal Stable Build
 import streamlit as st
 import os
 import sys
