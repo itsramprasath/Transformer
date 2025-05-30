@@ -1,147 +1,447 @@
-# Streamlit Chat Application - Version 3.1 - Render Optimized
+# Streamlit Chat Application - Version 3.0 - Minimal Stable Build
 import streamlit as st
 import os
 import sys
 from pathlib import Path
 import uuid
 from datetime import datetime
+import gc  # For garbage collection
+import time
+import psutil
+import logging
+from functools import wraps
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Memory monitoring
+def check_memory_usage():
+    process = psutil.Process(os.getpid())
+    memory_use = process.memory_info().rss / 1024 / 1024  # Convert to MB
+    if memory_use > 512:  # If using more than 512MB
+        logger.warning(f"High memory usage: {memory_use:.2f}MB")
+        gc.collect()  # Force garbage collection
+        return False
+    return True
+
+# Render-specific optimizations
+def handle_cold_start():
+    """Initialize necessary services during cold start"""
+    try:
+        # Pre-initialize services
+        get_cached_sheet_service()
+        get_cached_docs_service()
+        logger.info("Services pre-initialized successfully")
+    except Exception as e:
+        logger.error(f"Cold start initialization error: {e}")
+
+# Cache services with shorter TTL for Render
+@st.cache_resource(ttl=1800)  # 30 minute cache
+def get_cached_sheet_service():
+    return get_sheet_service()
+
+@st.cache_resource(ttl=1800)  # 30 minute cache
+def get_cached_docs_service():
+    return get_docs_service()
+
+# Add timeout decorator for functions
+def timeout_decorator(timeout_seconds):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not check_memory_usage():
+                st.warning("System is busy. Please try again in a moment.")
+                return None
+                
+            start_time = time.time()
+            result = func(*args, **kwargs)
+            
+            if time.time() - start_time > timeout_seconds:
+                logger.warning(f"Function {func.__name__} timed out")
+                st.warning("Operation took longer than expected. Please try again.")
+                gc.collect()
+                return None
+            return result
+        return wrapper
+    return decorator
+
+# Disable the dimming effect and configure page
+st.set_page_config(
+    page_title="Client Conversation Assistant",
+    page_icon="💬",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
+)
+
+# Configure Streamlit theme and memory management
+st.markdown("""
+    <style>
+        .stDeployButton {display:none;}
+        .stToolbar {display:none;}
+        .stSpinner > div > div {border-top-color: transparent;}
+        .stApp > header {display:none;}
+        .stMarkdown {max-width: 100%;}
+        .stButton > button {width: 100%;}
+        div.row-widget.stRadio > div {flex-direction: row;}
+        .stProgress .st-bo {background-color: transparent;}
+        * {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        /* Override any default title styles */
+        .main > div:first-child h1 {
+            visibility: visible !important;
+            height: auto !important;
+            display: block !important;
+        }
+        /* Hide Simple Chat title if it exists */
+        h1:contains("Simple Chat") {
+            display: none !important;
+        }
+        .stSidebar {
+            background-color: #f0f2f5;
+            padding: 1rem;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # Add the current directory to Python path
 current_dir = Path(__file__).parent
 if str(current_dir) not in sys.path:
     sys.path.append(str(current_dir))
 
-# Import core functionality
-from fred_us_tools_2 import chat
+# Import from our modules
+from fred_us_tools_2 import chat, summarize_message
 from google_services import (
-    get_sheet_service,
-    get_all_sheet_names,
-    check_sheet_exists,
-    create_sheet,
+    get_sheet_service, get_docs_service, get_drive_service,
+    get_all_sheet_names, save_to_sheets, save_to_docs,
+    check_sheet_exists, create_sheet,
     SPREADSHEET_ID
 )
 
-# Basic page config
-st.set_page_config(
-    page_title="Client Conversation Assistant",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Memory management: Clear old sessions
+def cleanup_old_sessions():
+    current_time = datetime.now()
+    for key in list(st.session_state.keys()):
+        if key.startswith('last_') and isinstance(st.session_state[key], datetime):
+            if (current_time - st.session_state[key]).total_seconds() > 3600:  # 1 hour
+                del st.session_state[key]
+    gc.collect()  # Force garbage collection
 
-def save_message(sheet_service, client_name, message, response):
-    """Save message to sheets"""
+@timeout_decorator(20)
+def load_chat_history(client_name):
+    """Load chat history from Google Sheets"""
     try:
-        row = [
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            message,
-            response
-        ]
-        sheet_service.spreadsheets().values().append(
-            spreadsheetId=SPREADSHEET_ID,
-            range=f"{client_name}!A:C",
-            valueInputOption='RAW',
-            body={'values': [row]}
-        ).execute()
-    except Exception as e:
-        st.error(f"Error saving: {str(e)}")
-
-def get_last_messages(sheet_service, client_name):
-    """Get last 2 messages for minimal context"""
-    try:
+        sheet_service = get_cached_sheet_service()
         result = sheet_service.spreadsheets().values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{client_name}!A:C"
+            range=f"{client_name}!A:G"
         ).execute()
+        
         values = result.get('values', [])
-        return values[-2:] if len(values) > 2 else values
-    except:
+        if not values:
+            return []
+            
+        # Process only last 20 messages for performance
+        chat_history = []
+        for row in values[-20:]:  # Get last 20 messages
+            if len(row) >= 7:
+                chat_history.append({
+                    "timestamp": row[0],
+                    "session_id": row[1] if len(row) > 1 else "",
+                    "user_message": row[2],
+                    "reply1": row[3] if len(row) > 3 else "",
+                    "reply2": row[4] if len(row) > 4 else "",
+                    "bot_reply": row[5],
+                    "summary": row[6]
+                })
+                
+        return chat_history
+    except Exception as e:
+        st.error(f"Error loading chat history: {e}")
         return []
 
-def main():
-    # Initialize session state
-    if 'client_name' not in st.session_state:
-        st.session_state.client_name = None
-    if 'sheet_service' not in st.session_state:
-        st.session_state.sheet_service = get_sheet_service()
-    if 'model_choice' not in st.session_state:
-        st.session_state.model_choice = 'openai'
+def save_interaction_to_sheets(sheet_service, client_name, interaction):
+    """Save interaction to sheets"""
+    try:
+        row_data = [
+            interaction.get('timestamp', ''),
+            interaction.get('session_id', ''),
+            interaction.get('user_message', ''),
+            interaction.get('reply1', ''),
+            interaction.get('reply2', ''),
+            interaction.get('final_reply', ''),
+            interaction.get('summary', '')
+        ]
+        
+        # Append new row
+        sheet_service.spreadsheets().values().append(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{client_name}!A:G",
+            valueInputOption='RAW',
+            body={'values': [row_data]}
+        ).execute()
+            
+        return True
+    except Exception as e:
+        st.error(f"Error saving to sheets: {e}")
+        return False
+
+def get_conversation_context(chat_history, current_question):
+    """Create a context for the AI"""
+    if not chat_history:
+        return f"You are having a conversation with {st.session_state.client_name}. This is your first interaction."
     
-    # Sidebar
+    context = f"""You are having a conversation with {st.session_state.client_name}. 
+Maintain consistency with your previous responses.
+
+Recent conversation history:
+"""
+    
+    # Include last 5 interactions for context
+    recent_history = chat_history[-5:]
+    for interaction in recent_history:
+        context += f"\nUser: {interaction['user_message']}\n"
+        context += f"Assistant: {interaction['bot_reply']}\n"
+        context += "---\n"
+    
+    context += f"\nCurrent message: {current_question}\n"
+    return context
+
+# Initialize session state variables
+if 'initialized' not in st.session_state:
+    st.session_state.initialized = False
+    st.session_state.session_id = str(uuid.uuid4())
+    st.session_state.client_name = None
+    st.session_state.client_initialized = False
+    st.session_state.chat_history = []
+    st.session_state.current_question = None
+    st.session_state.current_response = None
+    st.session_state.model_choice = "openai"
+
+def initialize_session_state():
+    """Initialize or reset session state variables"""
+    if not st.session_state.initialized:
+        st.session_state.session_id = str(uuid.uuid4())
+        st.session_state.client_name = None
+        st.session_state.client_initialized = False
+        st.session_state.chat_history = []
+        st.session_state.current_question = None
+        st.session_state.current_response = None
+        st.session_state.model_choice = "openai"
+        st.session_state.initialized = True
+
+@timeout_decorator(30)
+def handle_chat_input(prompt):
+    """Handle chat input"""
+    if not prompt:
+        return
+        
+    st.session_state.current_question = prompt
+    context = get_conversation_context(st.session_state.chat_history, prompt)
+    
+    with st.spinner("Processing..."):
+        response = chat(context, [], st.session_state.model_choice)
+        
+    # Parse replies and save interaction
+    reply1, reply2 = parse_replies(response)
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    summary = summarize_message(response)
+    
+    new_interaction = {
+        "timestamp": current_time,
+        "session_id": st.session_state.session_id,
+        "user_message": prompt,
+        "bot_reply": response,
+        "reply1": reply1,
+        "reply2": reply2,
+        "final_reply": response,
+        "summary": summary
+    }
+    
+    st.session_state.chat_history.append(new_interaction)
+    st.session_state.current_response = response
+    
+    # Save to sheets
+    try:
+        sheet_service = get_cached_sheet_service()
+        save_interaction_to_sheets(sheet_service, st.session_state.client_name, new_interaction)
+    except Exception as e:
+        st.error(f"Error saving to sheets: {e}")
+
+def render_chat_interface():
+    # Always set the main title
+    st.markdown("<h1>Client Conversation Assistant</h1>", unsafe_allow_html=True)
+    
+    if st.session_state.client_initialized:
+        st.markdown(f"### Conversation with {st.session_state.client_name}")
+        
+        # Chat input at the bottom
+        prompt = st.chat_input("Type your message here...")
+        
+        # Clear previous messages from display when new input is received
+        if prompt:
+            # Clear any previous messages from session state
+            st.session_state.current_question = None
+            st.session_state.current_response = None
+            # Handle new input
+            handle_chat_input(prompt)
+        
+        # Only show the most recent question and answer
+        if st.session_state.current_question:
+            # Container for current conversation
+            chat_container = st.container()
+            with chat_container:
+                with st.chat_message("user"):
+                    st.write(st.session_state.current_question)
+                if st.session_state.current_response:
+                    with st.chat_message("assistant"):
+                        st.write(st.session_state.current_response)
+    else:
+        st.info("👈 Please select or enter a client name in the sidebar to start.")
+
+def main():
+    try:
+        # Initialize if not already done
+        if not st.session_state.initialized:
+            initialize_session_state()
+        
+        # Always render sidebar first
+        render_sidebar()
+        
+        # Then render main interface
+        render_chat_interface()
+        
+        # Run cleanup periodically
+        cleanup_old_sessions()
+        
+    except Exception as e:
+        st.error(f"An error occurred while loading the application: {str(e)}")
+        logger.error(f"Application error: {str(e)}")
+        if st.button("Retry"):
+            st.experimental_rerun()
+
+# Use container-level caching for smoother updates
+@st.cache_data(ttl=300)
+def get_cached_sheet_names():
+    return get_all_sheet_names()
+
+def parse_replies(response_text):
+    """Parse the response text to extract Reply 1 and Reply 2"""
+    try:
+        if "Reply 1:" in response_text and "Reply 2:" in response_text:
+            parts = response_text.split("Reply 2:")
+            if len(parts) >= 2:
+                reply2 = parts[1].strip()
+                reply1 = parts[0].split("Reply 1:")[1].strip()
+                return reply1, reply2
+        return response_text, ""
+    except Exception as e:
+        st.error(f"Error parsing replies: {e}")
+        return response_text, ""
+
+def handle_start_conversation(client_name):
+    if not client_name:
+        st.error("Please select or enter a client name")
+        return
+    
+    # Initialize sheet for new client
+    sheet_service = get_sheet_service()
+    if not check_sheet_exists(sheet_service, SPREADSHEET_ID, client_name):
+        if create_sheet(sheet_service, SPREADSHEET_ID, client_name):
+            st.success(f"Created new sheet for {client_name}")
+        else:
+            st.error("Failed to create sheet")
+            return
+    
+    st.session_state.client_name = client_name
+    st.session_state.client_initialized = True
+    
+    # Load chat history from sheets
+    st.session_state.chat_history = load_chat_history(client_name)
+
+def handle_clear_chat():
+    st.session_state.session_id = str(uuid.uuid4())
+    st.session_state.chat_history = []
+    st.session_state.current_response = None
+    st.session_state.current_question = None
+
+def handle_new_client():
+    st.session_state.session_id = str(uuid.uuid4())
+    st.session_state.client_name = None
+    st.session_state.client_initialized = False
+    st.session_state.chat_history = []
+    st.session_state.current_response = None
+    st.session_state.current_question = None
+
+def render_sidebar():
     with st.sidebar:
         st.title("Settings")
         
         # Client selection
-        if not st.session_state.client_name:
-            clients = [""] + get_all_sheet_names()
-            selected = st.selectbox("Select client:", clients)
-            new_client = st.text_input("Or enter new name:")
+        st.subheader("Client Selection")
+        client_names = get_cached_sheet_names()
+        
+        if not st.session_state.client_initialized:
+            selected_client = st.selectbox(
+                "Select client:",
+                [""] + client_names,
+                key="client_selector"
+            )
             
-            if st.button("Start"):
-                client = new_client or selected
-                if client:
-                    if not check_sheet_exists(st.session_state.sheet_service, SPREADSHEET_ID, client):
-                        create_sheet(st.session_state.sheet_service, SPREADSHEET_ID, client)
-                    st.session_state.client_name = client
+            new_client_name = st.text_input(
+                "Or enter new client name:",
+                key="new_client_name"
+            )
+            
+            if st.button(
+                "Start Conversation",
+                key="start_conv",
+                use_container_width=True
+            ):
+                handle_start_conversation(new_client_name or selected_client)
         
         # Model selection
-        st.session_state.model_choice = st.radio(
-            "Model:",
+        st.subheader("Model Settings")
+        model = st.radio(
+            "Select AI Model:",
             ["openai", "claude"],
+            key="model_choice",
             horizontal=True
         )
+        if model != st.session_state.model_choice:
+            st.session_state.model_choice = model
         
-        # Reset button
-        if st.button("New Client"):
-            st.session_state.client_name = None
-    
-    # Main chat interface
-    if st.session_state.client_name:
-        st.title(f"Chat with {st.session_state.client_name}")
+        # Action buttons
+        st.button(
+            "Clear Chat",
+            on_click=handle_clear_chat,
+            use_container_width=True
+        )
         
-        # Chat input
-        message = st.chat_input("Message")
-        if message:
-            # Get minimal context
-            context = ""
-            last_msgs = get_last_messages(st.session_state.sheet_service, st.session_state.client_name)
-            if last_msgs:
-                for msg in last_msgs:
-                    if len(msg) >= 3:
-                        context += f"User: {msg[1]}\nAssistant: {msg[2]}\n"
-            context += f"User: {message}"
-            
-            # Get response
-            try:
-                response = chat(context, [], st.session_state.model_choice)
-                
-                # Save and display
-                save_message(
-                    st.session_state.sheet_service,
-                    st.session_state.client_name,
-                    message,
-                    response
-                )
-                
-                # Show exchange
-                with st.chat_message("user"):
-                    st.write(message)
-                with st.chat_message("assistant"):
-                    st.write(response)
-                    # Simple retry button
-                    if st.button("🔄 Retry"):
-                        new_response = chat(context, [], st.session_state.model_choice)
-                        st.write("---\nNew response:")
-                        st.write(new_response)
-                        save_message(
-                            st.session_state.sheet_service,
-                            st.session_state.client_name,
-                            message,
-                            new_response
-                        )
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-    else:
-        st.info("Select or enter client name to start")
+        st.button(
+            "New Client",
+            on_click=handle_new_client,
+            use_container_width=True
+        )
+        
+        # Display session info
+        st.markdown("---")
+        st.caption(f"Session ID: {st.session_state.session_id}")
+
+# Initialize on startup
+if 'cold_start_completed' not in st.session_state:
+    try:
+        handle_cold_start()
+        st.session_state.cold_start_completed = True
+    except Exception as e:
+        st.error(f"Error during cold start: {str(e)}")
+        logger.error(f"Cold start error: {str(e)}")
 
 if __name__ == "__main__":
     main() 
