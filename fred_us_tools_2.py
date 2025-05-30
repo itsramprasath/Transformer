@@ -24,9 +24,15 @@ anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
 SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
 
 # Initialize API clients
-client = OpenAI(api_key=openai_api_key)
+client = None
+claude = None
+
+if openai_api_key:
+    client = OpenAI(api_key=openai_api_key)
+if anthropic_api_key:
+    claude = anthropic.Anthropic(api_key=anthropic_api_key)
+
 MODEL = 'gpt-4'
-claude = anthropic.Anthropic(api_key=anthropic_api_key)
 
 # Google API scopes
 SCOPES = [
@@ -193,6 +199,8 @@ def save_to_docs(docs_service, drive_service, client_name: str, content: str) ->
 
 def summarize_message(message: str) -> str:
     """Create a brief summary of a message."""
+    if not client:
+        return "Error: OpenAI API key not configured"
     try:
         if not message:
             return ""
@@ -211,6 +219,8 @@ def summarize_message(message: str) -> str:
 
 def chat_with_openai(message: str, history: List[tuple]) -> str:
     """Chat function for OpenAI API with conversation history."""
+    if not client:
+        return "Error: OpenAI API key not configured. Please set up your API key in Streamlit Cloud."
     try:
         formatted_messages = [{"role": "system", "content": system_message}]
         for msg, response in history:
@@ -235,6 +245,8 @@ def chat_with_openai(message: str, history: List[tuple]) -> str:
 
 def chat_with_claude(message: str, history: List[tuple]) -> str:
     """Chat function for Claude API with conversation history."""
+    if not claude:
+        return "Error: Anthropic API key not configured. Please set up your API key in Streamlit Cloud."
     try:
         formatted_messages = []
         # Add conversation history
