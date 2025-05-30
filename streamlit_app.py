@@ -250,57 +250,21 @@ def handle_chat_input(prompt):
         st.error(f"Error saving to sheets: {e}")
 
 def render_chat_interface():
-    """Render chat interface"""
     if st.session_state.client_initialized:
         st.title(f"Conversation with {st.session_state.client_name}")
         
-        # Chat input at the bottom
-        prompt = st.chat_input(
-            "Type your message here...",
-            key=f"chat_input_{st.session_state.session_id}"
-        )
-        
+        # Chat input
+        prompt = st.chat_input("Type your message here...")
         if prompt:
             handle_chat_input(prompt)
         
-        # Display chat history
-        for interaction in st.session_state.chat_history[-10:]:  # Show last 10 messages
-            with st.chat_message("user"):
-                st.markdown(interaction['user_message'])
-            with st.chat_message("assistant"):
-                st.markdown(interaction['bot_reply'])
-        
-        # Show current interaction
+        # Only show current interaction
         if st.session_state.current_question:
             with st.chat_message("user"):
-                st.markdown(st.session_state.current_question)
-            
+                st.write(st.session_state.current_question)
             if st.session_state.current_response:
                 with st.chat_message("assistant"):
-                    st.markdown(st.session_state.current_response)
-                    
-                    # Add retry button
-                    col1, col2 = st.columns([0.1, 0.9])
-                    with col1:
-                        if st.button("🔄", key=f"retry_{st.session_state.session_id}"):
-                            context = get_conversation_context(
-                                st.session_state.chat_history[:-1], 
-                                st.session_state.current_question
-                            )
-                            new_response = chat(context, [], st.session_state.model_choice)
-                            
-                            # Update the last interaction
-                            reply1, reply2 = parse_replies(new_response)
-                            st.session_state.chat_history[-1].update({
-                                "bot_reply": new_response,
-                                "reply1": reply1,
-                                "reply2": reply2,
-                                "final_reply": new_response,
-                                "summary": summarize_message(new_response)
-                            })
-                            
-                            st.session_state.current_response = new_response
-                            st.rerun()
+                    st.write(st.session_state.current_response)
     else:
         st.title("Client Conversation Assistant")
         st.info("👈 Please select or enter a client name in the sidebar to start.")
