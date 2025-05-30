@@ -283,28 +283,26 @@ Recent conversation history:
     context += f"\nCurrent message: {current_question}\n"
     return context
 
-# Initialize session state variables
-if 'initialized' not in st.session_state:
-    st.session_state.initialized = False
-    st.session_state.session_id = str(uuid.uuid4())
-    st.session_state.client_name = None
-    st.session_state.client_initialized = False
-    st.session_state.chat_history = []
-    st.session_state.current_question = None
-    st.session_state.current_response = None
-    st.session_state.model_choice = "openai"
-
 def initialize_session_state():
     """Initialize or reset session state variables"""
-    if not st.session_state.initialized:
+    if 'initialized' not in st.session_state:
+        st.session_state.initialized = False
+    if 'session_id' not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
+    if 'client_name' not in st.session_state:
         st.session_state.client_name = None
+    if 'client_initialized' not in st.session_state:
         st.session_state.client_initialized = False
+    if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
+    if 'current_question' not in st.session_state:
         st.session_state.current_question = None
+    if 'current_response' not in st.session_state:
         st.session_state.current_response = None
+    if 'model_choice' not in st.session_state:
         st.session_state.model_choice = "openai"
-        st.session_state.initialized = True
+    
+    st.session_state.initialized = True
 
 @timeout_decorator(30)
 def handle_chat_input(prompt):
@@ -515,9 +513,16 @@ def render_chat_interface():
 
 def main():
     try:
-        # Initialize if not already done
-        if not st.session_state.initialized:
-            initialize_session_state()
+        # Initialize session state if not already done
+        if 'initialized' not in st.session_state:
+            st.session_state.initialized = False
+            st.session_state.session_id = str(uuid.uuid4())
+            st.session_state.client_name = None
+            st.session_state.client_initialized = False
+            st.session_state.chat_history = []
+            st.session_state.current_question = None
+            st.session_state.current_response = None
+            st.session_state.model_choice = "openai"
         
         # Always render sidebar first
         render_sidebar()
@@ -643,10 +648,17 @@ def render_sidebar():
         st.caption(f"Session ID: {st.session_state.session_id}")
 
 # Initialize on startup
-if 'cold_start_completed' not in st.session_state:
+if 'initialized' not in st.session_state:
     try:
         handle_cold_start()
-        st.session_state.cold_start_completed = True
+        st.session_state.initialized = True
+        st.session_state.session_id = str(uuid.uuid4())
+        st.session_state.client_name = None
+        st.session_state.client_initialized = False
+        st.session_state.chat_history = []
+        st.session_state.current_question = None
+        st.session_state.current_response = None
+        st.session_state.model_choice = "openai"
     except Exception as e:
         st.error(f"Error during cold start: {str(e)}")
         logger.error(f"Cold start error: {str(e)}")
