@@ -10,6 +10,8 @@ import time
 import psutil
 import logging
 from functools import wraps
+import concurrent.futures
+from typing import Optional
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -17,13 +19,18 @@ logger = logging.getLogger(__name__)
 
 # Memory monitoring
 def check_memory_usage():
-    process = psutil.Process(os.getpid())
-    memory_use = process.memory_info().rss / 1024 / 1024  # Convert to MB
-    if memory_use > 512:  # If using more than 512MB
-        logger.warning(f"High memory usage: {memory_use:.2f}MB")
-        gc.collect()  # Force garbage collection
-        return False
-    return True
+    """Monitor memory usage and force garbage collection if needed"""
+    try:
+        process = psutil.Process(os.getpid())
+        memory_use = process.memory_info().rss / 1024 / 1024  # Convert to MB
+        if memory_use > 512:  # If using more than 512MB
+            logger.warning(f"High memory usage: {memory_use:.2f}MB")
+            gc.collect()  # Force garbage collection
+            return False
+        return True
+    except Exception as e:
+        logger.error(f"Error checking memory: {e}")
+        return True
 
 # Render-specific optimizations
 def handle_cold_start():
@@ -39,11 +46,21 @@ def handle_cold_start():
 # Cache services with shorter TTL for Render
 @st.cache_resource(ttl=1800)  # 30 minute cache
 def get_cached_sheet_service():
-    return get_sheet_service()
+    try:
+        return get_sheet_service()
+    except Exception as e:
+        logger.error(f"Error getting sheet service: {e}")
+        st.error("Unable to connect to Google Sheets. Please try again later.")
+        return None
 
 @st.cache_resource(ttl=1800)  # 30 minute cache
 def get_cached_docs_service():
-    return get_docs_service()
+    try:
+        return get_docs_service()
+    except Exception as e:
+        logger.error(f"Error getting docs service: {e}")
+        st.error("Unable to connect to Google Docs. Please try again later.")
+        return None
 
 # Add timeout decorator for functions
 def timeout_decorator(timeout_seconds):
@@ -55,14 +72,27 @@ def timeout_decorator(timeout_seconds):
                 return None
                 
             start_time = time.time()
-            result = func(*args, **kwargs)
             
-            if time.time() - start_time > timeout_seconds:
-                logger.warning(f"Function {func.__name__} timed out")
-                st.warning("Operation took longer than expected. Please try again.")
-                gc.collect()
-                return None
-            return result
+            # Use ThreadPoolExecutor for timeout
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(func, *args, **kwargs)
+                try:
+                    result = future.result(timeout=timeout_seconds)
+                    
+                    if time.time() - start_time > timeout_seconds:
+                        logger.warning(f"Function {func.__name__} timed out")
+                        st.warning("Operation took longer than expected. Please try again.")
+                        gc.collect()
+                        return None
+                    return result
+                except concurrent.futures.TimeoutError:
+                    logger.error(f"Function {func.__name__} execution timed out")
+                    st.error("Operation timed out. Please try again.")
+                    return None
+                except Exception as e:
+                    logger.error(f"Error in {func.__name__}: {e}")
+                    st.error(f"An error occurred: {str(e)}")
+                    return None
         return wrapper
     return decorator
 
@@ -166,31 +196,38 @@ def load_chat_history(client_name):
         st.error(f"Error loading chat history: {e}")
         return []
 
-def save_interaction_to_sheets(sheet_service, client_name, interaction):
-    """Save interaction to sheets"""
-    try:
-        row_data = [
-            interaction.get('timestamp', ''),
-            interaction.get('session_id', ''),
-            interaction.get('user_message', ''),
-            interaction.get('reply1', ''),
-            interaction.get('reply2', ''),
-            interaction.get('final_reply', ''),
-            interaction.get('summary', '')
-        ]
-        
-        # Append new row
-        sheet_service.spreadsheets().values().append(
-            spreadsheetId=SPREADSHEET_ID,
-            range=f"{client_name}!A:G",
-            valueInputOption='RAW',
-            body={'values': [row_data]}
-        ).execute()
-            
-        return True
-    except Exception as e:
-        st.error(f"Error saving to sheets: {e}")
+def save_interaction_to_sheets(sheet_service, client_name, interaction, max_retries=3):
+    """Save interaction to sheets with retry mechanism"""
+    if not sheet_service:
+        logger.error("Sheet service not available")
         return False
+
+    for attempt in range(max_retries):
+        try:
+            row_data = [
+                interaction.get('timestamp', ''),
+                interaction.get('session_id', ''),
+                interaction.get('user_message', ''),
+                interaction.get('reply1', ''),
+                interaction.get('reply2', ''),
+                interaction.get('final_reply', ''),
+                interaction.get('summary', '')
+            ]
+            
+            sheet_service.spreadsheets().values().append(
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{client_name}!A:G",
+                valueInputOption='RAW',
+                body={'values': [row_data]}
+            ).execute()
+                
+            return True
+        except Exception as e:
+            logger.error(f"Error saving to sheets (attempt {attempt + 1}): {e}")
+            if attempt == max_retries - 1:
+                st.error(f"Error saving to sheets: {e}")
+                return False
+            time.sleep(1)  # Wait before retry
 
 def get_conversation_context(chat_history, current_question):
     """Create a context for the AI"""
@@ -238,72 +275,210 @@ def initialize_session_state():
 
 @timeout_decorator(30)
 def handle_chat_input(prompt):
-    """Handle chat input"""
+    """Handle chat input with optimized memory usage"""
     if not prompt:
         return
         
     st.session_state.current_question = prompt
-    context = get_conversation_context(st.session_state.chat_history, prompt)
+    context = get_conversation_context(st.session_state.chat_history[-5:], prompt)  # Only use last 5 messages for context
     
     with st.spinner("Processing..."):
-        response = chat(context, [], st.session_state.model_choice)
-        
-    # Parse replies and save interaction
-    reply1, reply2 = parse_replies(response)
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    summary = summarize_message(response)
-    
-    new_interaction = {
-        "timestamp": current_time,
-        "session_id": st.session_state.session_id,
-        "user_message": prompt,
-        "bot_reply": response,
-        "reply1": reply1,
-        "reply2": reply2,
-        "final_reply": response,
-        "summary": summary
-    }
-    
-    st.session_state.chat_history.append(new_interaction)
-    st.session_state.current_response = response
-    
-    # Save to sheets
-    try:
-        sheet_service = get_cached_sheet_service()
-        save_interaction_to_sheets(sheet_service, st.session_state.client_name, new_interaction)
-    except Exception as e:
-        st.error(f"Error saving to sheets: {e}")
+        try:
+            response = chat(context, [], st.session_state.model_choice)
+            if not response:
+                st.error("Failed to get response from AI model")
+                return
+                
+            # Parse replies and save interaction
+            reply1, reply2 = parse_replies(response)
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            summary = summarize_message(response)
+            
+            new_interaction = {
+                "timestamp": current_time,
+                "session_id": st.session_state.session_id,
+                "user_message": prompt,
+                "bot_reply": response,
+                "reply1": reply1,
+                "reply2": reply2,
+                "final_reply": response,
+                "summary": summary
+            }
+            
+            # Maintain a maximum history size
+            if len(st.session_state.chat_history) > 50:  # Keep only last 50 messages
+                st.session_state.chat_history = st.session_state.chat_history[-50:]
+            
+            st.session_state.chat_history.append(new_interaction)
+            st.session_state.current_response = response
+            
+            # Save to sheets with retry mechanism
+            sheet_service = get_cached_sheet_service()
+            if sheet_service:
+                save_interaction_to_sheets(sheet_service, st.session_state.client_name, new_interaction)
+            
+        except Exception as e:
+            logger.error(f"Error in chat input handling: {e}")
+            st.error("An error occurred while processing your message. Please try again.")
+            gc.collect()
 
 def render_chat_interface():
-    # Always set the main title
-    st.markdown("<h1>Client Conversation Assistant</h1>", unsafe_allow_html=True)
-    
-    if st.session_state.client_initialized:
-        st.markdown(f"### Conversation with {st.session_state.client_name}")
+    """Render chat interface with optimized performance"""
+    try:
+        # Always set the main title
+        st.markdown("<h1>Client Conversation Assistant</h1>", unsafe_allow_html=True)
         
-        # Chat input at the bottom
-        prompt = st.chat_input("Type your message here...")
-        
-        # Clear previous messages from display when new input is received
-        if prompt:
-            # Clear any previous messages from session state
-            st.session_state.current_question = None
-            st.session_state.current_response = None
-            # Handle new input
-            handle_chat_input(prompt)
-        
-        # Only show the most recent question and answer
-        if st.session_state.current_question:
-            # Container for current conversation
-            chat_container = st.container()
-            with chat_container:
-                with st.chat_message("user"):
-                    st.write(st.session_state.current_question)
+        if st.session_state.client_initialized:
+            st.markdown(f"### Conversation with {st.session_state.client_name}")
+            
+            # Chat input at the bottom
+            prompt = st.chat_input("Type your message here...")
+            
+            # Clear previous messages from display when new input is received
+            if prompt:
+                # Clear any previous messages from session state
+                st.session_state.current_question = None
+                st.session_state.current_response = None
+                # Handle new input
+                handle_chat_input(prompt)
+            
+            # Only show the most recent question and answer
+            if st.session_state.current_question:
+                # Container for current conversation
+                chat_container = st.container()
+                with chat_container:
+                    with st.chat_message("user"):
+                        st.write(st.session_state.current_question)
+                    if st.session_state.current_response:
+                        with st.chat_message("assistant"):
+                            # First show the response
+                            st.markdown(st.session_state.current_response)
+                            
+                            # Add retry button with error handling
+                            col1, col2 = st.columns([0.1, 0.9])
+                            with col1:
+                                retry_key = f"retry_current_{st.session_state.session_id}"
+                                if st.button("🔄", key=retry_key):
+                                    try:
+                                        with st.spinner("Regenerating response..."):
+                                            # Regenerate response with full context
+                                            context = get_conversation_context(
+                                                st.session_state.chat_history[-5:],  # Only use last 5 messages
+                                                st.session_state.current_question
+                                            )
+                                            new_response = chat(context, [], st.session_state.model_choice)
+                                            
+                                            if new_response:
+                                                # Update the last interaction with new response
+                                                reply1, reply2 = parse_replies(new_response)
+                                                st.session_state.chat_history[-1].update({
+                                                    "bot_reply": new_response,
+                                                    "reply1": reply1,
+                                                    "reply2": reply2,
+                                                    "final_reply": new_response,
+                                                    "summary": summarize_message(new_response)
+                                                })
+                                                
+                                                # Save updated response to sheets
+                                                sheet_service = get_cached_sheet_service()
+                                                if sheet_service:
+                                                    save_interaction_to_sheets(
+                                                        sheet_service,
+                                                        st.session_state.client_name,
+                                                        st.session_state.chat_history[-1]
+                                                    )
+                                                    
+                                                st.session_state.current_response = new_response
+                                                st.rerun()
+                                    except Exception as e:
+                                        logger.error(f"Error in retry: {e}")
+                                        st.error("Failed to regenerate response. Please try again.")
+                
+                # Save reply interface after the chat messages
                 if st.session_state.current_response:
-                    with st.chat_message("assistant"):
-                        st.write(st.session_state.current_response)
-    else:
-        st.info("👈 Please select or enter a client name in the sidebar to start.")
+                    with st.expander("Save Reply Tool", expanded=False):
+                        st.subheader("Save Reply to Google Docs")
+                        
+                        col1, col2 = st.columns([0.3, 0.7])
+                        with col1:
+                            reply_number = st.number_input(
+                                "Reply Number (1 or 2)",
+                                min_value=1,
+                                max_value=2,
+                                value=1,
+                                key=f"reply_number_{st.session_state.session_id}"
+                            )
+                        
+                        try:
+                            # Preview and edit
+                            reply1, reply2 = parse_replies(st.session_state.current_response)
+                            selected_reply = reply1 if reply_number == 1 else reply2
+                            
+                            edited_reply = st.text_area(
+                                "Preview & Edit Reply",
+                                value=selected_reply,
+                                height=150,
+                                key=f"edited_reply_{st.session_state.session_id}"
+                            )
+                            
+                            if st.button(
+                                "Save to Google Docs",
+                                key=f"save_docs_{st.session_state.session_id}",
+                                use_container_width=True
+                            ):
+                                with st.spinner("Saving to Google Docs..."):
+                                    try:
+                                        docs_service = get_cached_docs_service()
+                                        drive_service = get_drive_service()
+                                        
+                                        if not docs_service or not drive_service:
+                                            st.error("Unable to connect to Google services")
+                                            return
+                                        
+                                        # Format content for docs with session ID
+                                        content = f"Session: {st.session_state.session_id}\n"
+                                        content += f"@{st.session_state.client_name} - {st.session_state.current_question}\n\n"
+                                        content += f"@Reply - {edited_reply}"
+                                        
+                                        # Save to docs with timeout
+                                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                                            future = executor.submit(
+                                                save_to_docs,
+                                                docs_service,
+                                                drive_service,
+                                                st.session_state.client_name,
+                                                content
+                                            )
+                                            result = future.result(timeout=20)  # 20 second timeout
+                                        
+                                        if result["status"] == "success":
+                                            # Update the final reply in sheets
+                                            st.session_state.chat_history[-1]["final_reply"] = edited_reply
+                                            sheet_service = get_cached_sheet_service()
+                                            if sheet_service:
+                                                save_interaction_to_sheets(
+                                                    sheet_service,
+                                                    st.session_state.client_name,
+                                                    st.session_state.chat_history[-1]
+                                                )
+                                            st.success(f"Saved to Google Docs - [View Document]({result['document_url']})")
+                                        else:
+                                            st.error(f"Error saving to docs: {result['message']}")
+                                            
+                                    except concurrent.futures.TimeoutError:
+                                        st.error("Save operation timed out. Please try again.")
+                                    except Exception as e:
+                                        logger.error(f"Error saving reply: {e}")
+                                        st.error(f"Error saving reply: {str(e)}")
+                        except Exception as e:
+                            logger.error(f"Error in save reply interface: {e}")
+                            st.error("An error occurred in the save reply interface")
+        else:
+            st.info("👈 Please select or enter a client name in the sidebar to start.")
+    except Exception as e:
+        logger.error(f"Error in chat interface: {e}")
+        st.error("An error occurred in the chat interface. Please refresh the page.")
+        gc.collect()
 
 def main():
     try:
