@@ -1,3 +1,4 @@
+# Streamlit Chat Application with Memory Management and Performance Optimizations
 import streamlit as st
 import os
 import sys
