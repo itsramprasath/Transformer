@@ -43,6 +43,10 @@ env/
 token*.pickle
 *.key
 credentials*.json
+*credentials*
+*.pickle
+service-account*
+client_secret*
 
 # System
 .DS_Store
