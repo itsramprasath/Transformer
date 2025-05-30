@@ -1,39 +1,61 @@
 # Streamlit Chat Application - Version 3.0 - Minimal Stable Build
-import streamlit as st
-import uuid
+
+# Standard library imports
 import os
 import sys
-from pathlib import Path
-from datetime import datetime
+import uuid
 import gc  # For garbage collection
 import time
-import psutil
 import logging
+from pathlib import Path
+from datetime import datetime
 from functools import wraps
 import concurrent.futures
 from typing import Optional
 
-# Initialize all session state variables if they don't exist
-if 'initialized' not in st.session_state:
-    st.session_state.initialized = False
-if 'session_id' not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
-if 'client_name' not in st.session_state:
-    st.session_state.client_name = None
-if 'client_initialized' not in st.session_state:
-    st.session_state.client_initialized = False
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-if 'current_question' not in st.session_state:
-    st.session_state.current_question = None
-if 'current_response' not in st.session_state:
-    st.session_state.current_response = None
-if 'model_choice' not in st.session_state:
-    st.session_state.model_choice = "openai"
+# Third-party imports
+import streamlit as st
+import psutil
 
-# Configure logging
+# Initialize logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Add the current directory to Python path
+current_dir = Path(__file__).parent
+if str(current_dir) not in sys.path:
+    sys.path.append(str(current_dir))
+
+# Import local modules
+from fred_us_tools_2 import chat, summarize_message
+from google_services import (
+    get_sheet_service, get_docs_service, get_drive_service,
+    get_all_sheet_names, save_to_sheets, save_to_docs,
+    check_sheet_exists, create_sheet,
+    SPREADSHEET_ID
+)
+
+def initialize_session_state():
+    """Initialize or reset session state variables"""
+    if 'initialized' not in st.session_state:
+        st.session_state.initialized = False
+    if 'session_id' not in st.session_state:
+        st.session_state.session_id = str(uuid.uuid4())
+    if 'client_name' not in st.session_state:
+        st.session_state.client_name = None
+    if 'client_initialized' not in st.session_state:
+        st.session_state.client_initialized = False
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    if 'current_question' not in st.session_state:
+        st.session_state.current_question = None
+    if 'current_response' not in st.session_state:
+        st.session_state.current_response = None
+    if 'model_choice' not in st.session_state:
+        st.session_state.model_choice = "openai"
+
+# Initialize session state at startup
+initialize_session_state()
 
 def check_required_secrets():
     """Check if all required secrets are configured"""
@@ -522,6 +544,9 @@ def render_chat_interface():
 
 def main():
     try:
+        # Always ensure session state is initialized first
+        initialize_session_state()
+        
         # Always render sidebar first
         render_sidebar()
         
@@ -645,16 +670,14 @@ def render_sidebar():
         st.markdown("---")
         st.caption(f"Session ID: {st.session_state.session_id}")
 
-# Initialize on startup
-if 'initialized' not in st.session_state:
+if __name__ == "__main__":
     try:
         # First initialize all session state variables
         initialize_session_state()
         # Then handle cold start
         handle_cold_start()
+        # Finally run the main application
+        main()
     except Exception as e:
         st.error(f"Error during initialization: {str(e)}")
-        logger.error(f"Initialization error: {str(e)}")
-
-if __name__ == "__main__":
-    main() 
+        logger.error(f"Initialization error: {str(e)}") 
