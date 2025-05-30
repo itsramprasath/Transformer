@@ -17,6 +17,28 @@ from typing import Optional
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def check_required_secrets():
+    """Check if all required secrets are configured"""
+    missing_secrets = []
+    
+    # Check OpenAI API Key
+    if not os.getenv('OPENAI_API_KEY') and not hasattr(st.secrets, 'OPENAI_API_KEY'):
+        missing_secrets.append('OPENAI_API_KEY')
+    
+    # Check Anthropic API Key
+    if not os.getenv('ANTHROPIC_API_KEY') and not hasattr(st.secrets, 'ANTHROPIC_API_KEY'):
+        missing_secrets.append('ANTHROPIC_API_KEY')
+    
+    # Check Google Spreadsheet ID
+    if not os.getenv('SPREADSHEET_ID') and not hasattr(st.secrets, 'SPREADSHEET_ID'):
+        missing_secrets.append('SPREADSHEET_ID')
+    
+    # Check Google Service Account Credentials
+    if not hasattr(st.secrets, 'credentials_json'):
+        missing_secrets.append('credentials_json (Google Service Account credentials)')
+    
+    return missing_secrets
+
 # Memory monitoring
 def check_memory_usage():
     """Monitor memory usage and force garbage collection if needed"""
@@ -36,12 +58,23 @@ def check_memory_usage():
 def handle_cold_start():
     """Initialize necessary services during cold start"""
     try:
+        # Check for missing configurations
+        missing_secrets = check_required_secrets()
+        if missing_secrets:
+            st.error("⚠️ Missing Required Configurations:")
+            st.error("The following configurations are missing in Streamlit Cloud secrets:")
+            for secret in missing_secrets:
+                st.error(f"- {secret}")
+            st.error("Please add these configurations in your Streamlit Cloud dashboard under Settings > Secrets")
+            return
+            
         # Pre-initialize services
         get_cached_sheet_service()
         get_cached_docs_service()
         logger.info("Services pre-initialized successfully")
     except Exception as e:
         logger.error(f"Cold start initialization error: {e}")
+        st.error(f"Error during initialization: {str(e)}")
 
 # Cache services with shorter TTL for Render
 @st.cache_resource(ttl=1800)  # 30 minute cache
