@@ -4,6 +4,7 @@
 import os
 import json
 import requests
+from bs4 import BeautifulSoup
 from typing import List, Dict, Any, Tuple
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -24,22 +25,9 @@ anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
 SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
 
 # Initialize API clients
-client = None
-claude = None
-
-if openai_api_key:
-    try:
-        client = OpenAI(api_key=openai_api_key)
-    except Exception as e:
-        print(f"Error initializing OpenAI client: {e}")
-
-if anthropic_api_key:
-    try:
-        claude = anthropic.Anthropic(api_key=anthropic_api_key)
-    except Exception as e:
-        print(f"Error initializing Anthropic client: {e}")
-
+client = OpenAI(api_key=openai_api_key)
 MODEL = 'gpt-4'
+claude = anthropic.Anthropic(api_key=anthropic_api_key)
 
 # Google API scopes
 SCOPES = [
@@ -52,31 +40,23 @@ SCOPES = [
 system_message = """You are a helpful assistant. For each user message, provide two different responses labeled as 'Reply 1:' and 'Reply 2:'."""
 
 def get_google_credentials():
-    """Get credentials for Google APIs using service account."""
-    try:
-        # Check multiple possible locations for the credentials file
-        cred_paths = [
-            'credentials.json',  # Local development
-            '/etc/secrets/credentials.json',  # Traditional path
-            '/opt/render/project/src/credentials.json'  # Render's typical path
-        ]
-        
-        for cred_path in cred_paths:
-            if os.path.exists(cred_path):
-                try:
-                    from google.oauth2 import service_account
-                    return service_account.Credentials.from_service_account_file(
-                        cred_path,
-                        scopes=SCOPES
-                    )
-                except Exception as e:
-                    print(f"Failed to load credentials from {cred_path}: {e}")
-                    continue
-        
-        raise FileNotFoundError("Could not find valid credentials file")
-    except Exception as e:
-        print(f"Error in get_google_credentials: {e}")
-        raise
+    """Get and cache credentials for Google APIs."""
+    creds = None
+    if os.path.exists('token_sheets.pickle'):
+        with open('token_sheets.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                '/etc/secrets/credentials.json',
+                SCOPES
+            )
+            creds = flow.run_local_server(port=0)
+        with open('token_sheets.pickle', 'wb') as token:
+            pickle.dump(creds, token)
+    return creds
 
 def get_sheet_service():
     """Get Google Sheets API service."""
@@ -206,8 +186,6 @@ def save_to_docs(docs_service, drive_service, client_name: str, content: str) ->
 
 def summarize_message(message: str) -> str:
     """Create a brief summary of a message."""
-    if not client:
-        return "OpenAI API is not configured. Message summarization is unavailable."
     try:
         if not message:
             return ""
@@ -226,8 +204,6 @@ def summarize_message(message: str) -> str:
 
 def chat_with_openai(message: str, history: List[tuple]) -> str:
     """Chat function for OpenAI API with conversation history."""
-    if not client:
-        return "OpenAI API is not configured. Please set up your OPENAI_API_KEY in environment variables or Streamlit secrets."
     try:
         formatted_messages = [{"role": "system", "content": system_message}]
         for msg, response in history:
@@ -252,8 +228,6 @@ def chat_with_openai(message: str, history: List[tuple]) -> str:
 
 def chat_with_claude(message: str, history: List[tuple]) -> str:
     """Chat function for Claude API with conversation history."""
-    if not claude:
-        return "Claude API is not configured. Please set up your ANTHROPIC_API_KEY in environment variables or Streamlit secrets."
     try:
         formatted_messages = []
         # Add conversation history

@@ -1,3 +1,9 @@
+# Credentials and tokens
+credentials.json
+token*.pickle
+token*.json
+.env
+
 # Python
 __pycache__/
 *.py[cod]
@@ -22,9 +28,8 @@ wheels/
 
 # Virtual Environment
 venv/
-ENV/
 env/
-.env
+ENV/
 
 # IDE
 .idea/
@@ -32,35 +37,25 @@ env/
 *.swp
 *.swo
 
-# Jupyter Notebook
-.ipynb_checkpoints
-*.ipynb
-
-# Streamlit
-.streamlit/secrets.toml
-
-# Credentials and tokens
+# Credentials and Secrets
+.env
+credentials.json
 token*.pickle
-*.key
-credentials*.json
-*credentials*
-*.pickle
-service-account*
-client_secret*
-
-# System
-.DS_Store
-Thumbs.db
+.streamlit/secrets.toml
 
 # Logs
 *.log
-
-# Cache
-.cache/
-.pytest_cache/
+logs/
 
 # Cache directories
 .conda/
 .gradio/
 checkpoint/
-not_focus/ 
+not_focus/
+
+# Jupyter notebooks
+*.ipynb
+
+# System files
+.DS_Store
+Thumbs.db 
