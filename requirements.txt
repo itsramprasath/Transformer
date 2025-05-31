@@ -8,13 +8,13 @@ google-auth>=2.22.0
 google-auth-oauthlib>=1.0.0
 google-auth-httplib2>=0.1.0
 google-api-python-client>=2.100.0
-numpy>=1.23.5
-pandas>=1.5.3
+numpy==1.23.5
+pandas==1.5.3
 setuptools>=65.5.1
 ipywidgets>=8.0.7
-scipy>=1.9.3
-scikit-learn>=1.2.2
-matplotlib>=3.6.3
+scipy==1.9.3
+scikit-learn==1.2.2
+matplotlib==3.6.3
 transformers>=4.30.2
 tqdm>=4.65.0
 langchain>=0.0.235
@@ -23,7 +23,7 @@ langchain-openai>=0.0.2
 langchain_experimental>=0.0.42
 langchain_chroma>=0.0.10
 datasets>=2.12.0
-sentencepiece>=0.1.99
+sentencepiece==0.1.99
 google-generativeai>=0.2.0
 chromadb>=0.3.29
 plotly>=5.14.1

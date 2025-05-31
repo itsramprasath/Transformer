@@ -7,3 +7,10 @@ pkg-config
 gfortran
 libopenblas-dev
 liblapack-dev
+libjpeg-dev
+libpng-dev
+libfreetype6-dev
+zlib1g-dev
+libblas-dev
+libffi-dev
+libssl-dev
