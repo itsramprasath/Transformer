@@ -1,6 +1,6 @@
-streamlit>=1.31.0
+streamlit==1.32.1
 python-dotenv>=1.0.0
-requests>=2.31.0
+requests==2.28.1
 beautifulsoup4>=4.12.0
 openai>=1.0.0
 anthropic>=0.5.0
@@ -9,14 +9,13 @@ google-auth-oauthlib>=1.0.0
 google-auth-httplib2>=0.1.0
 google-api-python-client>=2.100.0
 numpy
-pandas
+pandas<2.2.0
 setuptools>=65.5.1
 ipywidgets
-scipy
-scikit-learn
-matplotlib
+scipy<1.12.0
+scikit-learn<1.4.0
+matplotlib<3.8.0
 gensim
---extra-index-url https://download.pytorch.org/whl/cpu
 torch
 transformers
 tqdm
