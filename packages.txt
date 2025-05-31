@@ -4,3 +4,6 @@ python3-distutils
 python3-setuptools
 cmake
 pkg-config
+gfortran
+libopenblas-dev
+liblapack-dev
