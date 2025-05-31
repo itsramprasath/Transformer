@@ -36,6 +36,19 @@ current_dir = Path(__file__).parent
 if str(current_dir) not in sys.path:
     sys.path.append(str(current_dir))
 
+# Check for required API keys
+if not st.secrets.get("OPENAI_API_KEY"):
+    st.error("OpenAI API key is missing. Please add it to your Streamlit secrets.")
+    st.stop()
+
+if not st.secrets.get("ANTHROPIC_API_KEY"):
+    st.error("Anthropic API key is missing. Please add it to your Streamlit secrets.")
+    st.stop()
+
+if not st.secrets.get("SPREADSHEET_ID"):
+    st.error("Google Spreadsheet ID is missing. Please add it to your Streamlit secrets.")
+    st.stop()
+
 # Import from our modules
 from fred_us_tools_2 import chat, summarize_message
 from google_services import (

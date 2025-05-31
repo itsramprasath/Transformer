@@ -17,17 +17,33 @@ from google.auth.transport.requests import Request
 from googleapiclient.errors import HttpError
 import pickle
 from datetime import datetime
+import streamlit as st
 
 # Load environment variables
 load_dotenv(override=True)
-openai_api_key = os.getenv('OPENAI_API_KEY')
-anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
-SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
 
-# Initialize API clients
-client = OpenAI(api_key=openai_api_key)
-MODEL = 'gpt-4'
-claude = anthropic.Anthropic(api_key=anthropic_api_key)
+# Try to get API keys from multiple sources
+def get_api_key(key_name: str) -> str:
+    """Get API key from environment or Streamlit secrets."""
+    # First try Streamlit secrets
+    if hasattr(st, 'secrets') and key_name in st.secrets:
+        return st.secrets[key_name]
+    # Then try environment variables
+    return os.getenv(key_name)
+
+openai_api_key = get_api_key('OPENAI_API_KEY')
+anthropic_api_key = get_api_key('ANTHROPIC_API_KEY')
+SPREADSHEET_ID = get_api_key('SPREADSHEET_ID')
+
+# Initialize API clients with error handling
+try:
+    client = OpenAI(api_key=openai_api_key)
+    MODEL = 'gpt-4'
+    claude = anthropic.Anthropic(api_key=anthropic_api_key)
+except Exception as e:
+    print(f"Error initializing API clients: {e}")
+    client = None
+    claude = None
 
 # Google API scopes
 SCOPES = [
