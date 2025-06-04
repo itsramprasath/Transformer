@@ -13,7 +13,7 @@ import json
 from google.oauth2 import service_account
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 import openai
-import anthropic
+from anthropic import Anthropic
 
 # Disable file watcher in production to avoid inotify limits
 if not os.environ.get("DEVELOPMENT"):
@@ -90,7 +90,9 @@ def init_api_clients():
         # Initialize Anthropic
         if st.secrets.get("ANTHROPIC_API_KEY"):
             try:
-                st.session_state.claude = anthropic.Client(api_key=st.secrets["ANTHROPIC_API_KEY"])
+                st.session_state.claude = Anthropic(
+                    api_key=st.secrets["ANTHROPIC_API_KEY"]
+                )
             except Exception as e:
                 st.error(f"Error initializing Anthropic client: {e}")
                 st.session_state.claude = None
@@ -196,8 +198,8 @@ def chat_with_ai(message, model="gpt-4"):
             try:
                 response = st.session_state.claude.messages.create(
                     model="claude-3-opus-20240229",
-                    max_tokens=1000,
-                    messages=[{"role": "user", "content": message}]
+                    messages=[{"role": "user", "content": message}],
+                    max_tokens=1000
                 )
                 return response.content[0].text
             except Exception as e:
