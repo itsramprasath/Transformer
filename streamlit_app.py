@@ -12,7 +12,7 @@ from io import BytesIO
 import json
 from google.oauth2 import service_account
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
-import openai
+from openai import OpenAI
 from anthropic import Anthropic
 
 # Disable file watcher in production to avoid inotify limits
@@ -72,25 +72,33 @@ from google_services import (
     SPREADSHEET_ID
 )
 
+# Initialize OpenAI client at the module level
+if "openai_client" not in st.session_state:
+    if "OPENAI_API_KEY" in st.secrets:
+        st.session_state.openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    else:
+        st.session_state.openai_client = None
+
 def init_api_clients():
     """Initialize API clients with proper error handling"""
     try:
         # Initialize OpenAI
         if "OPENAI_API_KEY" in st.secrets:
-            openai.api_key = st.secrets["OPENAI_API_KEY"]
+            if "openai_client" not in st.session_state:
+                st.session_state.openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             # Test the API key
             try:
-                openai.ChatCompletion.create(
+                st.session_state.openai_client.chat.completions.create(
                     model="gpt-4",
                     messages=[{"role": "system", "content": "Test"}],
                     max_tokens=5
                 )
             except Exception as e:
                 st.error(f"OpenAI API key validation failed: {e}")
-                openai.api_key = None
+                st.session_state.openai_client = None
         else:
             st.error("OpenAI API key not found in secrets")
-            openai.api_key = None
+            st.session_state.openai_client = None
         
         # Initialize Anthropic
         if "ANTHROPIC_API_KEY" in st.secrets:
@@ -117,7 +125,7 @@ def chat_with_ai(message, model="gpt-4"):
         if model == "claude":
             if not st.session_state.get("claude"):
                 st.error("Anthropic client not initialized")
-                return None
+                return "Error: Anthropic client not initialized. Please check your API key."
                 
             try:
                 response = st.session_state.claude.messages.create(
@@ -126,17 +134,20 @@ def chat_with_ai(message, model="gpt-4"):
                     max_tokens=1000,
                     system="You are a helpful assistant. For each user message, provide two different responses labeled as 'Reply 1:' and 'Reply 2:'"
                 )
-                return response.content[0].text
+                response_text = response.content[0].text
+                if "Reply 1:" not in response_text:
+                    response_text = f"Reply 1: {response_text}\nReply 2: Alternative response."
+                return response_text
             except Exception as e:
                 st.error(f"Error with Claude API: {e}")
-                return None
+                return f"Error with Claude API: {str(e)}"
         else:
-            if not openai.api_key:
+            if not st.session_state.get("openai_client"):
                 st.error("OpenAI client not initialized")
-                return None
+                return "Error: OpenAI client not initialized. Please check your API key."
                 
             try:
-                response = openai.ChatCompletion.create(
+                response = st.session_state.openai_client.chat.completions.create(
                     model=model,
                     messages=[
                         {"role": "system", "content": "You are a helpful assistant. For each user message, provide two different responses labeled as 'Reply 1:' and 'Reply 2:'"},
@@ -144,13 +155,16 @@ def chat_with_ai(message, model="gpt-4"):
                     ],
                     max_tokens=1000
                 )
-                return response.choices[0].message.content
+                response_text = response.choices[0].message.content
+                if "Reply 1:" not in response_text:
+                    response_text = f"Reply 1: {response_text}\nReply 2: Alternative response."
+                return response_text
             except Exception as e:
                 st.error(f"Error with OpenAI API: {e}")
-                return None
+                return f"Error with OpenAI API: {str(e)}"
     except Exception as e:
         st.error(f"Error in chat_with_ai: {e}")
-        return None
+        return f"Error in chat processing: {str(e)}"
 
 def load_chat_history(client_name):
     """Load chat history from Google Sheets and format it for context"""
@@ -466,19 +480,24 @@ def initialize_session_state():
         if key not in st.session_state:
             st.session_state[key] = default_value
 
-def parse_replies(response_text):
-    """Parse the response text to extract Reply 1 and Reply 2"""
+def parse_replies(response_text: str) -> tuple:
+    """Parse the response text to extract Reply 1 and Reply 2."""
     try:
+        if not response_text:
+            return ("No response received.", "No alternative response available.")
+            
         if "Reply 1:" in response_text and "Reply 2:" in response_text:
             parts = response_text.split("Reply 2:")
             if len(parts) >= 2:
                 reply2 = parts[1].strip()
                 reply1 = parts[0].split("Reply 1:")[1].strip()
-                return reply1, reply2
-        return response_text, ""
+                return (reply1, reply2)
+        
+        # If no explicit replies found, split the response
+        return (response_text, "Alternative response not available.")
     except Exception as e:
         st.error(f"Error parsing replies: {e}")
-        return response_text, ""
+        return ("Error parsing response.", "Error parsing alternative response.")
 
 def handle_start_conversation(client_name):
     if not client_name:
