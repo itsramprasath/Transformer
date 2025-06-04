@@ -91,7 +91,8 @@ def init_api_clients():
         if st.secrets.get("ANTHROPIC_API_KEY"):
             try:
                 st.session_state.claude = Anthropic(
-                    api_key=st.secrets["ANTHROPIC_API_KEY"]
+                    api_key=st.secrets["ANTHROPIC_API_KEY"],
+                    max_retries=3
                 )
             except Exception as e:
                 st.error(f"Error initializing Anthropic client: {e}")
@@ -199,7 +200,8 @@ def chat_with_ai(message, model="gpt-4"):
                 response = st.session_state.claude.messages.create(
                     model="claude-3-opus-20240229",
                     messages=[{"role": "user", "content": message}],
-                    max_tokens=1000
+                    max_tokens=1000,
+                    system="You are a helpful assistant. For each user message, provide two different responses labeled as 'Reply 1:' and 'Reply 2:'"
                 )
                 return response.content[0].text
             except Exception as e:
