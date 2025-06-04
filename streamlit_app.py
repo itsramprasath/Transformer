@@ -42,6 +42,12 @@ st.markdown("""
         .stButton > button {width: 100%;}
         div.row-widget.stRadio > div {flex-direction: row;}
         .stProgress .st-bo {background-color: transparent;}
+        .stError {
+            background-color: #ffebee;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
     </style>
 """, unsafe_allow_html=True)
 
