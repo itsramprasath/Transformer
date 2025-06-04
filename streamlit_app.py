@@ -4,6 +4,20 @@ import sys
 from pathlib import Path
 import uuid
 from datetime import datetime
+import google_auth_oauthlib.flow
+from googleapiclient.discovery import build
+import webbrowser
+import googleapiclient.http
+from io import BytesIO
+import json
+from google.oauth2 import service_account
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
+import openai
+from anthropic import Anthropic
+
+# Disable file watcher in production to avoid inotify limits
+if not os.environ.get("DEVELOPMENT"):
+    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
 
 # Disable the dimming effect and configure page
 st.set_page_config(
@@ -57,6 +71,86 @@ from google_services import (
     check_sheet_exists, create_sheet,
     SPREADSHEET_ID
 )
+
+def init_api_clients():
+    """Initialize API clients with proper error handling"""
+    try:
+        # Initialize OpenAI
+        if "OPENAI_API_KEY" in st.secrets:
+            openai.api_key = st.secrets["OPENAI_API_KEY"]
+            # Test the API key
+            try:
+                openai.ChatCompletion.create(
+                    model="gpt-4",
+                    messages=[{"role": "system", "content": "Test"}],
+                    max_tokens=5
+                )
+            except Exception as e:
+                st.error(f"OpenAI API key validation failed: {e}")
+                openai.api_key = None
+        else:
+            st.error("OpenAI API key not found in secrets")
+            openai.api_key = None
+        
+        # Initialize Anthropic
+        if "ANTHROPIC_API_KEY" in st.secrets:
+            try:
+                st.session_state.claude = Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+                # Test the API key
+                st.session_state.claude.messages.create(
+                    model="claude-3-opus-20240229",
+                    messages=[{"role": "user", "content": "Test"}],
+                    max_tokens=5
+                )
+            except Exception as e:
+                st.error(f"Error initializing Anthropic client: {e}")
+                st.session_state.claude = None
+        else:
+            st.error("Anthropic API key not found in secrets")
+            st.session_state.claude = None
+    except Exception as e:
+        st.error(f"Error initializing API clients: {e}")
+
+def chat_with_ai(message, model="gpt-4"):
+    """Chat with AI using either OpenAI or Anthropic"""
+    try:
+        if model == "claude":
+            if not st.session_state.get("claude"):
+                st.error("Anthropic client not initialized")
+                return None
+                
+            try:
+                response = st.session_state.claude.messages.create(
+                    model="claude-3-opus-20240229",
+                    messages=[{"role": "user", "content": message}],
+                    max_tokens=1000,
+                    system="You are a helpful assistant. For each user message, provide two different responses labeled as 'Reply 1:' and 'Reply 2:'"
+                )
+                return response.content[0].text
+            except Exception as e:
+                st.error(f"Error with Claude API: {e}")
+                return None
+        else:
+            if not openai.api_key:
+                st.error("OpenAI client not initialized")
+                return None
+                
+            try:
+                response = openai.ChatCompletion.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant. For each user message, provide two different responses labeled as 'Reply 1:' and 'Reply 2:'"},
+                        {"role": "user", "content": message}
+                    ],
+                    max_tokens=1000
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                st.error(f"Error with OpenAI API: {e}")
+                return None
+    except Exception as e:
+        st.error(f"Error in chat_with_ai: {e}")
+        return None
 
 def load_chat_history(client_name):
     """Load chat history from Google Sheets and format it for context"""
@@ -184,7 +278,7 @@ def handle_chat_input(prompt):
     
     with st.spinner("Processing..."):
         # Pass the full context as the prompt
-        response = chat(context, [], st.session_state.model_choice)
+        response = chat_with_ai(context)
     
     # Save the interaction to chat history with full details
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -251,7 +345,7 @@ def render_chat_interface():
                                     st.session_state.chat_history[:-1], 
                                     st.session_state.current_question
                                 )
-                                new_response = chat(context, [], st.session_state.model_choice)
+                                new_response = chat_with_ai(context)
                                 
                                 # Update the last interaction with new response
                                 reply1, reply2 = parse_replies(new_response)
