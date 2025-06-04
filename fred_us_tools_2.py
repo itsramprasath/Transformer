@@ -17,74 +17,17 @@ from google.auth.transport.requests import Request
 from googleapiclient.errors import HttpError
 import pickle
 from datetime import datetime
-import streamlit as st
-import atexit
 
 # Load environment variables
 load_dotenv(override=True)
+openai_api_key = os.getenv('OPENAI_API_KEY')
+anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
+SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
 
-def get_api_key(key_name: str) -> str:
-    """Get API key from environment or Streamlit secrets."""
-    # First try Streamlit secrets
-    if hasattr(st, 'secrets') and key_name in st.secrets:
-        return st.secrets[key_name]
-    # Then try environment variables
-    return os.getenv(key_name)
-
-# Global variables for API clients
-client = None
-claude = None
-
-# Initialize API clients with proper error handling
-def init_api_clients():
-    """Initialize API clients with proper error handling."""
-    global client, claude
-    
-    openai_api_key = get_api_key('OPENAI_API_KEY')
-    anthropic_api_key = get_api_key('ANTHROPIC_API_KEY')
-    
-    if not openai_api_key:
-        st.error("OpenAI API key is missing. Please add it to your Streamlit secrets.")
-        client = None
-    else:
-        try:
-            client = OpenAI(api_key=openai_api_key)
-        except Exception as e:
-            st.error(f"Failed to initialize OpenAI client: {e}")
-            client = None
-    
-    if not anthropic_api_key:
-        st.error("Anthropic API key is missing. Please add it to your Streamlit secrets.")
-        claude = None
-    else:
-        try:
-            # Initialize Anthropic client with proper cleanup
-            claude = anthropic.Anthropic(
-                api_key=anthropic_api_key,
-                max_retries=3  # Add some retries for reliability
-            )
-            # Register cleanup function
-            atexit.register(cleanup_clients)
-        except Exception as e:
-            st.error(f"Failed to initialize Anthropic client: {e}")
-            claude = None
-
-def cleanup_clients():
-    """Cleanup function for API clients"""
-    global claude
-    if claude:
-        try:
-            # Properly close the Anthropic client
-            if hasattr(claude, '_client') and hasattr(claude._client, 'close'):
-                claude._client.close()
-        except Exception:
-            pass  # Ignore cleanup errors
-        claude = None
-
-# Initialize clients
-init_api_clients()
-
+# Initialize API clients
+client = OpenAI(api_key=openai_api_key)
 MODEL = 'gpt-4'
+claude = anthropic.Anthropic(api_key=anthropic_api_key)
 
 # Google API scopes
 SCOPES = [
@@ -261,9 +204,6 @@ def summarize_message(message: str) -> str:
 
 def chat_with_openai(message: str, history: List[tuple]) -> str:
     """Chat function for OpenAI API with conversation history."""
-    if not client:
-        return "Error: OpenAI client is not properly initialized. Please check your API key."
-        
     try:
         formatted_messages = [{"role": "system", "content": system_message}]
         for msg, response in history:
@@ -283,13 +223,11 @@ def chat_with_openai(message: str, history: List[tuple]) -> str:
             response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
         return response_text
     except Exception as e:
-        return f"Error with OpenAI API: {str(e)}"
+        print(f"Error in chat_with_openai: {e}")
+        return f"Error: {str(e)}"
 
 def chat_with_claude(message: str, history: List[tuple]) -> str:
     """Chat function for Claude API with conversation history."""
-    if not claude:
-        return "Error: Anthropic client is not properly initialized. Please check your API key."
-        
     try:
         formatted_messages = []
         # Add conversation history
@@ -313,7 +251,8 @@ def chat_with_claude(message: str, history: List[tuple]) -> str:
             response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
         return response_text
     except Exception as e:
-        return f"Error with Anthropic API: {str(e)}"
+        print(f"Error in chat_with_claude: {e}")
+        return f"Error: {str(e)}"
 
 def chat(message: str, history: List[tuple], model_choice: str = "openai") -> str:
     """Main chat function that routes to the appropriate model."""
