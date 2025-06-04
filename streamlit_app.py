@@ -80,17 +80,25 @@ def init_google_client():
 
 def init_api_clients():
     """Initialize API clients with proper error handling"""
-    # Initialize OpenAI
-    if st.secrets.get("OPENAI_API_KEY"):
-        openai.api_key = st.secrets["OPENAI_API_KEY"]
-    else:
-        st.error("OpenAI API key not found in secrets")
-    
-    # Initialize Anthropic
-    if st.secrets.get("ANTHROPIC_API_KEY"):
-        st.session_state.claude = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
-    else:
-        st.error("Anthropic API key not found in secrets")
+    try:
+        # Initialize OpenAI
+        if st.secrets.get("OPENAI_API_KEY"):
+            openai.api_key = st.secrets["OPENAI_API_KEY"]
+        else:
+            st.error("OpenAI API key not found in secrets")
+        
+        # Initialize Anthropic
+        if st.secrets.get("ANTHROPIC_API_KEY"):
+            try:
+                st.session_state.claude = anthropic.Client(api_key=st.secrets["ANTHROPIC_API_KEY"])
+            except Exception as e:
+                st.error(f"Error initializing Anthropic client: {e}")
+                st.session_state.claude = None
+        else:
+            st.error("Anthropic API key not found in secrets")
+            st.session_state.claude = None
+    except Exception as e:
+        st.error(f"Error initializing API clients: {e}")
 
 def get_sheet_service():
     """Get Google Sheets API service"""
@@ -181,21 +189,33 @@ def chat_with_ai(message, model="gpt-4"):
     """Chat with AI using either OpenAI or Anthropic"""
     try:
         if model == "claude":
-            response = st.session_state.claude.messages.create(
-                model="claude-3-opus-20240229",
-                max_tokens=1000,
-                messages=[{"role": "user", "content": message}]
-            )
-            return response.content[0].text
+            if not st.session_state.get("claude"):
+                st.error("Anthropic client not initialized")
+                return None
+                
+            try:
+                response = st.session_state.claude.messages.create(
+                    model="claude-3-opus-20240229",
+                    max_tokens=1000,
+                    messages=[{"role": "user", "content": message}]
+                )
+                return response.content[0].text
+            except Exception as e:
+                st.error(f"Error with Claude API: {e}")
+                return None
         else:
-            response = openai.ChatCompletion.create(
-                model=model,
-                messages=[{"role": "user", "content": message}],
-                max_tokens=1000
-            )
-            return response.choices[0].message.content
+            try:
+                response = openai.ChatCompletion.create(
+                    model=model,
+                    messages=[{"role": "user", "content": message}],
+                    max_tokens=1000
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                st.error(f"Error with OpenAI API: {e}")
+                return None
     except Exception as e:
-        st.error(f"Error chatting with AI: {e}")
+        st.error(f"Error in chat_with_ai: {e}")
         return None
 
 def main():
