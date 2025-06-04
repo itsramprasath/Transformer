@@ -84,17 +84,21 @@ def init_api_clients():
     try:
         # Initialize OpenAI
         if "OPENAI_API_KEY" in st.secrets:
-            if "openai_client" not in st.session_state:
-                st.session_state.openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-            # Test the API key
             try:
-                st.session_state.openai_client.chat.completions.create(
+                client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                # Test the API key
+                test_response = client.chat.completions.create(
                     model="gpt-4",
                     messages=[{"role": "system", "content": "Test"}],
                     max_tokens=5
                 )
+                if test_response:
+                    st.session_state.openai_client = client
+                else:
+                    st.error("OpenAI API test failed - no response")
+                    st.session_state.openai_client = None
             except Exception as e:
-                st.error(f"OpenAI API key validation failed: {e}")
+                st.error(f"OpenAI API key validation failed: {str(e)}")
                 st.session_state.openai_client = None
         else:
             st.error("OpenAI API key not found in secrets")
@@ -103,21 +107,26 @@ def init_api_clients():
         # Initialize Anthropic
         if "ANTHROPIC_API_KEY" in st.secrets:
             try:
-                st.session_state.claude = Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+                claude = Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
                 # Test the API key
-                st.session_state.claude.messages.create(
+                test_response = claude.messages.create(
                     model="claude-3-opus-20240229",
                     messages=[{"role": "user", "content": "Test"}],
                     max_tokens=5
                 )
+                if test_response:
+                    st.session_state.claude = claude
+                else:
+                    st.error("Anthropic API test failed - no response")
+                    st.session_state.claude = None
             except Exception as e:
-                st.error(f"Error initializing Anthropic client: {e}")
+                st.error(f"Error initializing Anthropic client: {str(e)}")
                 st.session_state.claude = None
         else:
             st.error("Anthropic API key not found in secrets")
             st.session_state.claude = None
     except Exception as e:
-        st.error(f"Error initializing API clients: {e}")
+        st.error(f"Error initializing API clients: {str(e)}")
 
 def chat_with_ai(message, model="gpt-4"):
     """Chat with AI using either OpenAI or Anthropic"""
@@ -134,12 +143,16 @@ def chat_with_ai(message, model="gpt-4"):
                     max_tokens=1000,
                     system="You are a helpful assistant. For each user message, provide two different responses labeled as 'Reply 1:' and 'Reply 2:'"
                 )
+                if not response or not response.content:
+                    return "Error: No response received from Claude API"
                 response_text = response.content[0].text
+                if not isinstance(response_text, str):
+                    return f"Error: Unexpected response type from Claude API: {type(response_text)}"
                 if "Reply 1:" not in response_text:
                     response_text = f"Reply 1: {response_text}\nReply 2: Alternative response."
                 return response_text
             except Exception as e:
-                st.error(f"Error with Claude API: {e}")
+                st.error(f"Error with Claude API: {str(e)}")
                 return f"Error with Claude API: {str(e)}"
         else:
             if not st.session_state.get("openai_client"):
@@ -155,15 +168,19 @@ def chat_with_ai(message, model="gpt-4"):
                     ],
                     max_tokens=1000
                 )
+                if not response or not response.choices:
+                    return "Error: No response received from OpenAI API"
                 response_text = response.choices[0].message.content
+                if not isinstance(response_text, str):
+                    return f"Error: Unexpected response type from OpenAI API: {type(response_text)}"
                 if "Reply 1:" not in response_text:
                     response_text = f"Reply 1: {response_text}\nReply 2: Alternative response."
                 return response_text
             except Exception as e:
-                st.error(f"Error with OpenAI API: {e}")
+                st.error(f"Error with OpenAI API: {str(e)}")
                 return f"Error with OpenAI API: {str(e)}"
     except Exception as e:
-        st.error(f"Error in chat_with_ai: {e}")
+        st.error(f"Error in chat_with_ai: {str(e)}")
         return f"Error in chat processing: {str(e)}"
 
 def load_chat_history(client_name):
@@ -349,41 +366,46 @@ def render_chat_interface():
                         # First show the response
                         st.markdown(st.session_state.current_response)
                         
-                        # Add retry button
-                        col1, col2 = st.columns([0.1, 0.9])
-                        with col1:
-                            retry_key = f"retry_current_{st.session_state.session_id}"
-                            if st.button("🔄", key=retry_key):
-                                # Regenerate response with full context
-                                context = get_conversation_context(
-                                    st.session_state.chat_history[:-1], 
-                                    st.session_state.current_question
-                                )
-                                new_response = chat_with_ai(context)
-                                
-                                # Update the last interaction with new response
-                                reply1, reply2 = parse_replies(new_response)
-                                st.session_state.chat_history[-1].update({
-                                    "bot_reply": new_response,
-                                    "reply1": reply1,
-                                    "reply2": reply2,
-                                    "final_reply": new_response,
-                                    "summary": summarize_message(new_response)
-                                })
-                                
-                                # Save updated response to sheets
+                        # Add retry button in a more visible location
+                        retry_key = f"retry_current_{st.session_state.session_id}"
+                        if st.button("🔄 Retry Response", key=retry_key, type="primary"):
+                            with st.spinner("Regenerating response..."):
                                 try:
-                                    sheet_service = get_sheet_service()
-                                    save_interaction_to_sheets(
-                                        sheet_service,
-                                        st.session_state.client_name,
-                                        st.session_state.chat_history[-1]
+                                    # Regenerate response with full context
+                                    context = get_conversation_context(
+                                        st.session_state.chat_history[:-1], 
+                                        st.session_state.current_question
                                     )
-                                except Exception as e:
-                                    st.error(f"Error saving retry to sheets: {e}")
+                                    new_response = chat_with_ai(context)
                                     
-                                st.session_state.current_response = new_response
-                                st.rerun()
+                                    if new_response:
+                                        # Update the last interaction with new response
+                                        reply1, reply2 = parse_replies(new_response)
+                                        st.session_state.chat_history[-1].update({
+                                            "bot_reply": new_response,
+                                            "reply1": reply1,
+                                            "reply2": reply2,
+                                            "final_reply": new_response,
+                                            "summary": summarize_message(new_response)
+                                        })
+                                        
+                                        # Save updated response to sheets
+                                        try:
+                                            sheet_service = get_sheet_service()
+                                            save_interaction_to_sheets(
+                                                sheet_service,
+                                                st.session_state.client_name,
+                                                st.session_state.chat_history[-1]
+                                            )
+                                        except Exception as e:
+                                            st.error(f"Error saving retry to sheets: {str(e)}")
+                                            
+                                        st.session_state.current_response = new_response
+                                        st.rerun()
+                                    else:
+                                        st.error("Failed to generate new response")
+                                except Exception as e:
+                                    st.error(f"Error during retry: {str(e)}")
             
             # Save reply interface after the chat messages
             if st.session_state.current_response:
@@ -486,17 +508,20 @@ def parse_replies(response_text: str) -> tuple:
         if not response_text:
             return ("No response received.", "No alternative response available.")
             
-        if "Reply 1:" in response_text and "Reply 2:" in response_text:
+        if isinstance(response_text, str) and "Reply 1:" in response_text and "Reply 2:" in response_text:
             parts = response_text.split("Reply 2:")
             if len(parts) >= 2:
                 reply2 = parts[1].strip()
                 reply1 = parts[0].split("Reply 1:")[1].strip()
                 return (reply1, reply2)
         
-        # If no explicit replies found, split the response
-        return (response_text, "Alternative response not available.")
+        # If no explicit replies found or response_text is not a string
+        if isinstance(response_text, str):
+            return (response_text, "Alternative response not available.")
+        else:
+            return (str(response_text), "Alternative response not available.")
     except Exception as e:
-        st.error(f"Error parsing replies: {e}")
+        st.error(f"Error parsing replies: {str(e)}")
         return ("Error parsing response.", "Error parsing alternative response.")
 
 def handle_start_conversation(client_name):
