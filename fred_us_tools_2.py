@@ -19,10 +19,8 @@ from googleapiclient.errors import HttpError
 import pickle
 from datetime import datetime
 
-# Initialize API clients with keys from secrets
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Model configuration
 MODEL = 'gpt-4'
-claude = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
 
 # Google API scopes
 SCOPES = [
@@ -36,6 +34,22 @@ SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
 
 # System messages
 system_message = """You are a helpful assistant. For each user message, provide two different responses labeled as 'Reply 1:' and 'Reply 2:'."""
+
+def get_openai_client():
+    """Get OpenAI client with proper error handling."""
+    try:
+        return OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    except Exception as e:
+        st.error(f"Error initializing OpenAI client: {str(e)}")
+        return None
+
+def get_anthropic_client():
+    """Get Anthropic client with proper error handling."""
+    try:
+        return anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+    except Exception as e:
+        st.error(f"Error initializing Anthropic client: {str(e)}")
+        return None
 
 def get_google_credentials():
     """Get and cache credentials for Google APIs."""
@@ -187,22 +201,46 @@ def summarize_message(message: str) -> str:
     try:
         if not message:
             return ""
+            
+        # Log the attempt to create summary
+        print(f"Attempting to summarize message: {message[:100]}...")
+        
+        # Get OpenAI client
+        client = get_openai_client()
+        if not client:
+            error_msg = "Failed to initialize OpenAI client"
+            print(error_msg)
+            st.error(error_msg)
+            return "Error creating summary"
+            
         response = client.chat.completions.create(
             model=MODEL,
             messages=[
                 {"role": "system", "content": "Create a brief 1-2 sentence summary of the following message:"},
                 {"role": "user", "content": message}
             ],
-            max_tokens=100
+            max_tokens=100,
+            temperature=0.5  # Lower temperature for more focused summaries
         )
-        return response.choices[0].message.content
+        
+        summary = response.choices[0].message.content
+        print(f"Successfully created summary: {summary}")
+        return summary
+        
     except Exception as e:
-        print(f"Error summarizing message: {e}")
+        error_msg = f"Error summarizing message: {str(e)}"
+        print(error_msg)
+        st.error(error_msg)
         return "Error creating summary"
 
 def chat_with_openai(message: str, history: List[tuple]) -> str:
     """Chat function for OpenAI API with conversation history."""
     try:
+        # Get OpenAI client
+        client = get_openai_client()
+        if not client:
+            return "Error: Failed to initialize OpenAI client"
+            
         formatted_messages = [{"role": "system", "content": system_message}]
         for msg, response in history:
             formatted_messages.extend([
@@ -221,12 +259,19 @@ def chat_with_openai(message: str, history: List[tuple]) -> str:
             response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
         return response_text
     except Exception as e:
-        print(f"Error in chat_with_openai: {e}")
+        error_msg = f"Error in chat_with_openai: {str(e)}"
+        print(error_msg)
+        st.error(error_msg)
         return f"Error: {str(e)}"
 
 def chat_with_claude(message: str, history: List[tuple]) -> str:
     """Chat function for Claude API with conversation history."""
     try:
+        # Get Anthropic client
+        claude = get_anthropic_client()
+        if not claude:
+            return "Error: Failed to initialize Anthropic client"
+            
         formatted_messages = []
         # Add conversation history
         for msg, response in history:
@@ -249,7 +294,9 @@ def chat_with_claude(message: str, history: List[tuple]) -> str:
             response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
         return response_text
     except Exception as e:
-        print(f"Error in chat_with_claude: {e}")
+        error_msg = f"Error in chat_with_claude: {str(e)}"
+        print(error_msg)
+        st.error(error_msg)
         return f"Error: {str(e)}"
 
 def chat(message: str, history: List[tuple], model_choice: str = "openai") -> str:
