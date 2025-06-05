@@ -4,16 +4,12 @@ import sys
 from pathlib import Path
 import uuid
 from datetime import datetime
-import google_auth_oauthlib.flow
-from googleapiclient.discovery import build
-import webbrowser
-import googleapiclient.http
-from io import BytesIO
-import json
-from google.oauth2 import service_account
-from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from openai import OpenAI
 from anthropic import Anthropic
+
+# Initialize API clients with keys from secrets
+openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+anthropic_client = Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
 
 # Disable file watcher in production to avoid inotify limits
 if not os.environ.get("DEVELOPMENT"):
@@ -42,18 +38,6 @@ st.markdown("""
         .stButton > button {width: 100%;}
         div.row-widget.stRadio > div {flex-direction: row;}
         .stProgress .st-bo {background-color: transparent;}
-        .signin-button {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-        }
-        .auth-status {
-            position: absolute;
-            top: 20px;
-            right: 200px;
-            z-index: 1000;
-        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -68,13 +52,16 @@ from google_services import (
     get_sheet_service, get_docs_service, get_drive_service,
     get_all_sheet_names, save_to_sheets, save_to_docs,
     check_sheet_exists, create_sheet,
-    SPREADSHEET_ID, get_google_credentials
+    SPREADSHEET_ID
 )
 
 def load_chat_history(client_name):
     """Load chat history from Google Sheets and format it for context"""
     try:
         sheet_service = get_sheet_service()
+        if not sheet_service:
+            return []
+            
         result = sheet_service.spreadsheets().values().get(
             spreadsheetId=SPREADSHEET_ID,
             range=f"{client_name}!A:G"
@@ -223,7 +210,8 @@ def handle_chat_input(prompt):
     # Save to sheets
     try:
         sheet_service = get_sheet_service()
-        save_interaction_to_sheets(sheet_service, st.session_state.client_name, new_interaction)
+        if sheet_service:
+            save_interaction_to_sheets(sheet_service, st.session_state.client_name, new_interaction)
     except Exception as e:
         st.error(f"Error saving to sheets: {e}")
 
@@ -279,11 +267,12 @@ def render_chat_interface():
                                 # Save updated response to sheets
                                 try:
                                     sheet_service = get_sheet_service()
-                                    save_interaction_to_sheets(
-                                        sheet_service,
-                                        st.session_state.client_name,
-                                        st.session_state.chat_history[-1]
-                                    )
+                                    if sheet_service:
+                                        save_interaction_to_sheets(
+                                            sheet_service,
+                                            st.session_state.client_name,
+                                            st.session_state.chat_history[-1]
+                                        )
                                 except Exception as e:
                                     st.error(f"Error saving retry to sheets: {e}")
                                     
@@ -292,7 +281,7 @@ def render_chat_interface():
             
             # Save reply interface after the chat messages
             if st.session_state.current_response:
-                with st.expander("Save Reply Tool", expanded=False):  # Changed to collapsed by default
+                with st.expander("Save Reply Tool", expanded=False):
                     st.subheader("Save Reply to Google Docs")
                     
                     col1, col2 = st.columns([0.3, 0.7])
@@ -343,11 +332,12 @@ def render_chat_interface():
                                     # Update the final reply in sheets
                                     st.session_state.chat_history[-1]["final_reply"] = edited_reply
                                     sheet_service = get_sheet_service()
-                                    save_interaction_to_sheets(
-                                        sheet_service,
-                                        st.session_state.client_name,
-                                        st.session_state.chat_history[-1]
-                                    )
+                                    if sheet_service:
+                                        save_interaction_to_sheets(
+                                            sheet_service,
+                                            st.session_state.client_name,
+                                            st.session_state.chat_history[-1]
+                                        )
                                     st.success(f"Saved to Google Docs - [View Document]({result['document_url']})")
                                 else:
                                     st.error(f"Error saving to docs: {result['message']}")
@@ -360,7 +350,6 @@ def render_chat_interface():
 
 def main():
     initialize_session_state()
-    render_auth_status()  # Add authentication status at the top
     render_sidebar()
     render_chat_interface()
 
@@ -374,9 +363,7 @@ def initialize_session_state():
         'current_response': None,
         'model_choice': "openai",
         'client_initialized': False,
-        'needs_update': False,
-        'is_authenticated': False,
-        'default_spreadsheet_loaded': False
+        'needs_update': False
     }
     
     for key, default_value in defaults.items():
@@ -404,6 +391,10 @@ def handle_start_conversation(client_name):
     
     # Initialize sheet for new client
     sheet_service = get_sheet_service()
+    if not sheet_service:
+        st.error("Could not connect to Google Sheets")
+        return
+        
     if not check_sheet_exists(sheet_service, SPREADSHEET_ID, client_name):
         if create_sheet(sheet_service, SPREADSHEET_ID, client_name):
             st.success(f"Created new sheet for {client_name}")
@@ -434,89 +425,13 @@ def handle_new_client():
     st.session_state.current_question = None
     st.session_state.needs_update = True
 
-def handle_auth():
-    """Handle Google authentication"""
-    try:
-        creds = get_google_credentials()
-        if creds and creds.valid:
-            st.session_state.is_authenticated = True
-            return True
-        return False
-    except Exception as e:
-        st.error(f"Authentication error: {str(e)}")
-        return False
-
-def load_default_spreadsheet():
-    """Load the default RAG spreadsheet or create it if it doesn't exist"""
-    try:
-        if not st.session_state.is_authenticated:
-            return
-            
-        sheet_service = get_sheet_service()
-        try:
-            # Try to access the spreadsheet
-            sheet_service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
-        except Exception:
-            # Create new spreadsheet named "RAG"
-            spreadsheet = {
-                'properties': {
-                    'title': 'RAG'
-                }
-            }
-            spreadsheet = sheet_service.spreadsheets().create(body=spreadsheet).execute()
-            os.environ['SPREADSHEET_ID'] = spreadsheet['spreadsheetId']
-            
-        st.session_state.default_spreadsheet_loaded = True
-    except Exception as e:
-        st.error(f"Error loading default spreadsheet: {str(e)}")
-
-# Use container-level caching for smoother updates
-@st.cache_data(ttl=300)
-def get_cached_sheet_names():
-    """Get cached sheet names with proper error handling"""
-    try:
-        if not st.session_state.is_authenticated:
-            return ["Example Client"]
-            
-        if not st.session_state.default_spreadsheet_loaded:
-            load_default_spreadsheet()
-            
-        names = get_all_sheet_names()
-        if not names:
-            return ["Example Client"]
-        return names
-    except Exception as e:
-        print(f"Error getting sheet names: {e}")
-        return ["Example Client"]
-
-def render_auth_status():
-    """Render authentication status and sign-in button"""
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        if st.session_state.is_authenticated:
-            st.markdown('<div class="auth-status">✓ Connected to Google</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="auth-status">❌ Not connected</div>', unsafe_allow_html=True)
-    
-    with col2:
-        if not st.session_state.is_authenticated:
-            if st.button("Sign in with Google", key="google_signin"):
-                if handle_auth():
-                    st.rerun()
-        else:
-            if st.button("Sign out", key="google_signout"):
-                st.session_state.is_authenticated = False
-                st.session_state.default_spreadsheet_loaded = False
-                st.rerun()
-
 def render_sidebar():
     with st.sidebar:
         st.title("Settings")
         
         # Client selection
         st.subheader("Client Selection")
-        client_names = get_cached_sheet_names()
+        client_names = get_all_sheet_names()
         
         if not st.session_state.client_initialized:
             selected_client = st.selectbox(
@@ -535,10 +450,7 @@ def render_sidebar():
                 key="start_conv",
                 use_container_width=True
             ):
-                if not st.session_state.is_authenticated:
-                    st.error("Please sign in with Google first")
-                else:
-                    handle_start_conversation(new_client_name or selected_client)
+                handle_start_conversation(new_client_name or selected_client)
         
         # Model selection
         st.subheader("Model Settings")
@@ -567,6 +479,28 @@ def render_sidebar():
         # Display session info
         st.markdown("---")
         st.caption(f"Session ID: {st.session_state.session_id}")
+
+def chat(context, history, model_choice):
+    try:
+        if model_choice == "openai":
+            response = openai_client.chat.completions.create(
+                model="gpt-4-turbo-preview",
+                messages=[{"role": "user", "content": context}],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            return response.choices[0].message.content
+        else:  # claude
+            response = anthropic_client.messages.create(
+                model="claude-3-opus-20240229",
+                max_tokens=2000,
+                temperature=0.7,
+                messages=[{"role": "user", "content": context}]
+            )
+            return response.content[0].text
+    except Exception as e:
+        st.error(f"Error in chat completion: {str(e)}")
+        return "I apologize, but I encountered an error processing your request. Please try again."
 
 if __name__ == "__main__":
     main() 

@@ -1,17 +1,9 @@
 import os
 from typing import List, Dict
 from datetime import datetime
-import pickle
-import google.auth
+import streamlit as st
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv(override=True)
-SPREADSHEET_ID = os.getenv('SPREADSHEET_ID', '')  # Default to empty string
 
 # Google API scopes
 SCOPES = [
@@ -20,137 +12,63 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive'
 ]
 
-__all__ = [
-    'get_sheet_service',
-    'get_docs_service',
-    'get_drive_service',
-    'get_all_sheet_names',
-    'save_to_sheets',
-    'save_to_docs',
-    'check_sheet_exists',
-    'create_sheet',
-    'SPREADSHEET_ID'
-]
+# Get spreadsheet ID from Streamlit secrets
+SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
 
 def get_google_credentials():
-    """Get and cache credentials for Google APIs."""
-    creds = None
-    
-    # First, try to use service account if we're in production
+    """Get credentials from Streamlit secrets."""
     try:
-        from google.oauth2 import service_account
-        if os.path.exists('/etc/secrets/credentials.json'):
-            creds = service_account.Credentials.from_service_account_file(
-                '/etc/secrets/credentials.json',
-                scopes=SCOPES
-            )
-            return creds
+        # Create credentials dict from Streamlit secrets
+        credentials_dict = {
+            "type": st.secrets["gcp_service_account"]["type"],
+            "project_id": st.secrets["gcp_service_account"]["project_id"],
+            "private_key_id": st.secrets["gcp_service_account"]["private_key_id"],
+            "private_key": st.secrets["gcp_service_account"]["private_key"],
+            "client_email": st.secrets["gcp_service_account"]["client_email"],
+            "client_id": st.secrets["gcp_service_account"]["client_id"],
+            "auth_uri": st.secrets["gcp_service_account"]["auth_uri"],
+            "token_uri": st.secrets["gcp_service_account"]["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["gcp_service_account"]["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": st.secrets["gcp_service_account"]["client_x509_cert_url"]
+        }
+        
+        credentials = service_account.Credentials.from_service_account_info(
+            credentials_dict,
+            scopes=SCOPES
+        )
+        return credentials
     except Exception as e:
-        print(f"Service account auth failed, falling back to OAuth: {e}")
-    
-    # If service account fails or we're in development, try OAuth flow
-    try:
-        if os.path.exists('token_sheets.pickle'):
-            with open('token_sheets.pickle', 'rb') as token:
-                creds = pickle.load(token)
-                
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                # Try local credentials.json first
-                cred_file = 'credentials.json'
-                if not os.path.exists(cred_file):
-                    cred_file = '/etc/secrets/credentials.json'
-                
-                flow = InstalledAppFlow.from_client_secrets_file(cred_file, SCOPES)
-                try:
-                    creds = flow.run_local_server(port=0)
-                except Exception as e:
-                    # If browser auth fails, try console auth
-                    print(f"Browser auth failed, trying console: {e}")
-                    creds = flow.run_console()
-                    
-            # Save the credentials for the next run
-            with open('token_sheets.pickle', 'wb') as token:
-                pickle.dump(creds, token)
-                
-        return creds
-    except Exception as e:
-        print(f"OAuth authentication failed: {e}")
-        raise
+        st.error(f"Error getting Google credentials: {str(e)}")
+        return None
 
 def get_sheet_service():
     """Get Google Sheets API service."""
     creds = get_google_credentials()
-    return build('sheets', 'v4', credentials=creds)
+    if creds:
+        return build('sheets', 'v4', credentials=creds)
+    return None
 
 def get_docs_service():
     """Get Google Docs API service."""
     creds = get_google_credentials()
-    return build('docs', 'v1', credentials=creds)
+    if creds:
+        return build('docs', 'v1', credentials=creds)
+    return None
 
 def get_drive_service():
     """Get Google Drive API service."""
     creds = get_google_credentials()
-    return build('drive', 'v3', credentials=creds)
-
-def find_or_create_rag_spreadsheet() -> str:
-    """Find existing RAG spreadsheet or create a new one."""
-    try:
-        drive_service = get_drive_service()
-        sheet_service = get_sheet_service()
-        
-        # Search for existing RAG spreadsheet
-        results = drive_service.files().list(
-            q="name='RAG' and mimeType='application/vnd.google-apps.spreadsheet'",
-            spaces='drive',
-            fields='files(id, name)'
-        ).execute()
-        
-        files = results.get('files', [])
-        
-        if files:
-            # Use the first matching spreadsheet
-            spreadsheet_id = files[0]['id']
-        else:
-            # Create new spreadsheet
-            spreadsheet = {
-                'properties': {
-                    'title': 'RAG'
-                }
-            }
-            spreadsheet = sheet_service.spreadsheets().create(body=spreadsheet).execute()
-            spreadsheet_id = spreadsheet['spreadsheetId']
-            
-            # Add default sheet with headers
-            values = [['Timestamp', 'Client', 'Message', 'Reply 1', 'Reply 2', 'Final Reply', 'Summarized Reply']]
-            body = {'values': values}
-            sheet_service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet_id,
-                range='Sheet1!A1:G1',
-                valueInputOption='RAW',
-                body=body
-            ).execute()
-        
-        return spreadsheet_id
-    except Exception as e:
-        print(f"Error finding/creating RAG spreadsheet: {e}")
-        return None
+    if creds:
+        return build('drive', 'v3', credentials=creds)
+    return None
 
 def get_all_sheet_names() -> List[str]:
     """Get all sheet names from the spreadsheet"""
     try:
-        global SPREADSHEET_ID
         sheet_service = get_sheet_service()
-        
-        # If no spreadsheet ID, try to find or create RAG spreadsheet
-        if not SPREADSHEET_ID:
-            SPREADSHEET_ID = find_or_create_rag_spreadsheet()
-            if not SPREADSHEET_ID:
-                return ["Example Client"]
-                
-        # Get all sheets
+        if not sheet_service:
+            return ["Example Client"]
+            
         spreadsheet = sheet_service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
         sheets = spreadsheet.get('sheets', [])
         
@@ -169,6 +87,9 @@ def get_all_sheet_names() -> List[str]:
 def check_sheet_exists(sheet_service, spreadsheet_id: str, sheet_name: str) -> bool:
     """Check if a sheet exists in the spreadsheet"""
     try:
+        if not sheet_service:
+            return False
+            
         spreadsheet = sheet_service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
         return any(sheet['properties']['title'] == sheet_name for sheet in spreadsheet.get('sheets', []))
     except Exception as e:
@@ -178,6 +99,9 @@ def check_sheet_exists(sheet_service, spreadsheet_id: str, sheet_name: str) -> b
 def create_sheet(sheet_service, spreadsheet_id: str, sheet_name: str) -> bool:
     """Create a new sheet with headers"""
     try:
+        if not sheet_service:
+            return False
+            
         request = {
             'addSheet': {
                 'properties': {
@@ -211,6 +135,9 @@ def create_sheet(sheet_service, spreadsheet_id: str, sheet_name: str) -> bool:
 def save_to_sheets(sheet_service, client_name: str, message: str, reply: str, summary: str) -> bool:
     """Save a conversation entry to sheets"""
     try:
+        if not sheet_service:
+            return False
+            
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # Parse replies
@@ -246,6 +173,12 @@ def save_to_sheets(sheet_service, client_name: str, message: str, reply: str, su
 def save_to_docs(docs_service, drive_service, client_name: str, content: str) -> Dict:
     """Save content to a Google Doc"""
     try:
+        if not docs_service or not drive_service:
+            return {
+                "status": "error",
+                "message": "Google services not initialized"
+            }
+            
         # Create a new document
         doc_title = f"{client_name}_conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         document = {
