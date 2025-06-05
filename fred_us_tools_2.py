@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Tuple
 from dotenv import load_dotenv
 from openai import OpenAI
 import anthropic
+import streamlit as st
 import google.auth
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
@@ -18,16 +19,10 @@ from googleapiclient.errors import HttpError
 import pickle
 from datetime import datetime
 
-# Load environment variables
-load_dotenv(override=True)
-openai_api_key = os.getenv('OPENAI_API_KEY')
-anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
-SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
-
-# Initialize API clients
-client = OpenAI(api_key=openai_api_key)
+# Initialize API clients with keys from secrets
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 MODEL = 'gpt-4'
-claude = anthropic.Anthropic(api_key=anthropic_api_key)
+claude = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
 
 # Google API scopes
 SCOPES = [
@@ -35,6 +30,9 @@ SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
 ]
+
+# Get spreadsheet ID from secrets
+SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
 
 # System messages
 system_message = """You are a helpful assistant. For each user message, provide two different responses labeled as 'Reply 1:' and 'Reply 2:'."""
