@@ -14,3 +14,5 @@ zlib1g-dev
 libblas-dev
 libffi-dev
 libssl-dev
+python3-wheel
+python3-pip
