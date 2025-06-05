@@ -4,6 +4,20 @@ import sys
 from pathlib import Path
 import uuid
 from datetime import datetime
+import google_auth_oauthlib.flow
+from googleapiclient.discovery import build
+import webbrowser
+import googleapiclient.http
+from io import BytesIO
+import json
+from google.oauth2 import service_account
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
+from openai import OpenAI
+from anthropic import Anthropic
+
+# Disable file watcher in production to avoid inotify limits
+if not os.environ.get("DEVELOPMENT"):
+    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
 
 # Disable the dimming effect and configure page
 st.set_page_config(
@@ -28,6 +42,18 @@ st.markdown("""
         .stButton > button {width: 100%;}
         div.row-widget.stRadio > div {flex-direction: row;}
         .stProgress .st-bo {background-color: transparent;}
+        .signin-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .auth-status {
+            position: absolute;
+            top: 20px;
+            right: 200px;
+            z-index: 1000;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -42,7 +68,7 @@ from google_services import (
     get_sheet_service, get_docs_service, get_drive_service,
     get_all_sheet_names, save_to_sheets, save_to_docs,
     check_sheet_exists, create_sheet,
-    SPREADSHEET_ID
+    SPREADSHEET_ID, get_google_credentials
 )
 
 def load_chat_history(client_name):
@@ -334,13 +360,9 @@ def render_chat_interface():
 
 def main():
     initialize_session_state()
+    render_auth_status()  # Add authentication status at the top
     render_sidebar()
     render_chat_interface()
-
-# Use container-level caching for smoother updates
-@st.cache_data(ttl=300)
-def get_cached_sheet_names():
-    return get_all_sheet_names()
 
 def initialize_session_state():
     """Initialize session state variables"""
@@ -352,7 +374,9 @@ def initialize_session_state():
         'current_response': None,
         'model_choice': "openai",
         'client_initialized': False,
-        'needs_update': False
+        'needs_update': False,
+        'is_authenticated': False,
+        'default_spreadsheet_loaded': False
     }
     
     for key, default_value in defaults.items():
@@ -410,6 +434,82 @@ def handle_new_client():
     st.session_state.current_question = None
     st.session_state.needs_update = True
 
+def handle_auth():
+    """Handle Google authentication"""
+    try:
+        creds = get_google_credentials()
+        if creds and creds.valid:
+            st.session_state.is_authenticated = True
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Authentication error: {str(e)}")
+        return False
+
+def load_default_spreadsheet():
+    """Load the default RAG spreadsheet or create it if it doesn't exist"""
+    try:
+        if not st.session_state.is_authenticated:
+            return
+            
+        sheet_service = get_sheet_service()
+        try:
+            # Try to access the spreadsheet
+            sheet_service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+        except Exception:
+            # Create new spreadsheet named "RAG"
+            spreadsheet = {
+                'properties': {
+                    'title': 'RAG'
+                }
+            }
+            spreadsheet = sheet_service.spreadsheets().create(body=spreadsheet).execute()
+            os.environ['SPREADSHEET_ID'] = spreadsheet['spreadsheetId']
+            
+        st.session_state.default_spreadsheet_loaded = True
+    except Exception as e:
+        st.error(f"Error loading default spreadsheet: {str(e)}")
+
+# Use container-level caching for smoother updates
+@st.cache_data(ttl=300)
+def get_cached_sheet_names():
+    """Get cached sheet names with proper error handling"""
+    try:
+        if not st.session_state.is_authenticated:
+            return ["Example Client"]
+            
+        if not st.session_state.default_spreadsheet_loaded:
+            load_default_spreadsheet()
+            
+        names = get_all_sheet_names()
+        if not names:
+            return ["Example Client"]
+        return names
+    except Exception as e:
+        print(f"Error getting sheet names: {e}")
+        return ["Example Client"]
+
+def render_auth_status():
+    """Render authentication status and sign-in button"""
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        if st.session_state.is_authenticated:
+            st.markdown('<div class="auth-status">✓ Connected to Google</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="auth-status">❌ Not connected</div>', unsafe_allow_html=True)
+    
+    with col2:
+        if not st.session_state.is_authenticated:
+            if st.button("Sign in with Google", key="google_signin"):
+                if handle_auth():
+                    st.rerun()
+        else:
+            if st.button("Sign out", key="google_signout"):
+                st.session_state.is_authenticated = False
+                st.session_state.default_spreadsheet_loaded = False
+                st.rerun()
+
 def render_sidebar():
     with st.sidebar:
         st.title("Settings")
@@ -435,7 +535,10 @@ def render_sidebar():
                 key="start_conv",
                 use_container_width=True
             ):
-                handle_start_conversation(new_client_name or selected_client)
+                if not st.session_state.is_authenticated:
+                    st.error("Please sign in with Google first")
+                else:
+                    handle_start_conversation(new_client_name or selected_client)
         
         # Model selection
         st.subheader("Model Settings")

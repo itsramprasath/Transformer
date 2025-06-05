@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv(override=True)
-SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
+SPREADSHEET_ID = os.getenv('SPREADSHEET_ID', '')  # Default to empty string
 
 # Google API scopes
 SCOPES = [
@@ -44,7 +44,6 @@ def get_google_credentials():
                 '/etc/secrets/credentials.json',
                 scopes=SCOPES
             )
-            print("Using service account authentication")
             return creds
     except Exception as e:
         print(f"Service account auth failed, falling back to OAuth: {e}")
@@ -72,6 +71,7 @@ def get_google_credentials():
                     print(f"Browser auth failed, trying console: {e}")
                     creds = flow.run_console()
                     
+            # Save the credentials for the next run
             with open('token_sheets.pickle', 'wb') as token:
                 pickle.dump(creds, token)
                 
@@ -94,6 +94,77 @@ def get_drive_service():
     """Get Google Drive API service."""
     creds = get_google_credentials()
     return build('drive', 'v3', credentials=creds)
+
+def find_or_create_rag_spreadsheet() -> str:
+    """Find existing RAG spreadsheet or create a new one."""
+    try:
+        drive_service = get_drive_service()
+        sheet_service = get_sheet_service()
+        
+        # Search for existing RAG spreadsheet
+        results = drive_service.files().list(
+            q="name='RAG' and mimeType='application/vnd.google-apps.spreadsheet'",
+            spaces='drive',
+            fields='files(id, name)'
+        ).execute()
+        
+        files = results.get('files', [])
+        
+        if files:
+            # Use the first matching spreadsheet
+            spreadsheet_id = files[0]['id']
+        else:
+            # Create new spreadsheet
+            spreadsheet = {
+                'properties': {
+                    'title': 'RAG'
+                }
+            }
+            spreadsheet = sheet_service.spreadsheets().create(body=spreadsheet).execute()
+            spreadsheet_id = spreadsheet['spreadsheetId']
+            
+            # Add default sheet with headers
+            values = [['Timestamp', 'Client', 'Message', 'Reply 1', 'Reply 2', 'Final Reply', 'Summarized Reply']]
+            body = {'values': values}
+            sheet_service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range='Sheet1!A1:G1',
+                valueInputOption='RAW',
+                body=body
+            ).execute()
+        
+        return spreadsheet_id
+    except Exception as e:
+        print(f"Error finding/creating RAG spreadsheet: {e}")
+        return None
+
+def get_all_sheet_names() -> List[str]:
+    """Get all sheet names from the spreadsheet"""
+    try:
+        global SPREADSHEET_ID
+        sheet_service = get_sheet_service()
+        
+        # If no spreadsheet ID, try to find or create RAG spreadsheet
+        if not SPREADSHEET_ID:
+            SPREADSHEET_ID = find_or_create_rag_spreadsheet()
+            if not SPREADSHEET_ID:
+                return ["Example Client"]
+                
+        # Get all sheets
+        spreadsheet = sheet_service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+        sheets = spreadsheet.get('sheets', [])
+        
+        # Filter out empty or invalid sheet names
+        valid_names = [
+            sheet['properties']['title'] 
+            for sheet in sheets 
+            if sheet.get('properties', {}).get('title')
+        ]
+        
+        return valid_names if valid_names else ["Example Client"]
+    except Exception as e:
+        print(f"Error getting sheet names: {e}")
+        return ["Example Client"]
 
 def check_sheet_exists(sheet_service, spreadsheet_id: str, sheet_name: str) -> bool:
     """Check if a sheet exists in the spreadsheet"""
@@ -122,7 +193,7 @@ def create_sheet(sheet_service, spreadsheet_id: str, sheet_name: str) -> bool:
         ).execute()
 
         # Add headers
-        values = [['Timestamp', 'Client', 'Message', 'Reply 1', 'Reply 2', 'Final Reply', 'Summarized Reply']]
+        values = [['Timestamp', 'Session ID', 'Message', 'Reply 1', 'Reply 2', 'Final Reply', 'Summarized Reply']]
         body = {'values': values}
         
         sheet_service.spreadsheets().values().update(
@@ -136,16 +207,6 @@ def create_sheet(sheet_service, spreadsheet_id: str, sheet_name: str) -> bool:
     except Exception as e:
         print(f"Error creating sheet: {e}")
         return False
-
-def get_all_sheet_names() -> List[str]:
-    """Get all sheet names from the spreadsheet"""
-    try:
-        sheet_service = get_sheet_service()
-        spreadsheet = sheet_service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
-        return [sheet['properties']['title'] for sheet in spreadsheet.get('sheets', [])]
-    except Exception as e:
-        print(f"Error getting sheet names: {e}")
-        return ["Example Client"]  # Fallback
 
 def save_to_sheets(sheet_service, client_name: str, message: str, reply: str, summary: str) -> bool:
     """Save a conversation entry to sheets"""
@@ -182,79 +243,44 @@ def save_to_sheets(sheet_service, client_name: str, message: str, reply: str, su
         print(f"Error saving to sheets: {e}")
         return False
 
-def save_to_docs(docs_service, drive_service, client_name: str, content: str) -> Dict[str, str]:
-    """Save content to Google Doc, appending to existing document if it exists"""
+def save_to_docs(docs_service, drive_service, client_name: str, content: str) -> Dict:
+    """Save content to a Google Doc"""
     try:
-        # Check if a document for this client already exists
-        base_doc_title = f"{client_name}_chats"
-        query = f"name = '{base_doc_title}' and mimeType = 'application/vnd.google-apps.document' and trashed = false"
-        results = drive_service.files().list(
-            q=query,
-            spaces='drive',
-            fields='files(id, name, createdTime)',
-            orderBy='createdTime desc'
-        ).execute()
-
-        files = results.get('files', [])
+        # Create a new document
+        doc_title = f"{client_name}_conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        document = {
+            'title': doc_title
+        }
+        doc = docs_service.documents().create(body=document).execute()
+        document_id = doc.get('documentId')
         
-        if files:  # If document exists, append to it
-            document_id = files[0]['id']
-            
-            # Get the current document to find where to append
-            document = docs_service.documents().get(documentId=document_id).execute()
-            doc_content = document.get('body').get('content')
-            end_index = doc_content[-1].get('endIndex', 1) if doc_content else 1
-
-            # Add a separator before new content
-            content_to_add = f"\n\n=== {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n\n{content}"
-
-            # Create the request to append content
-            requests = [{
+        # Insert content
+        requests = [
+            {
                 'insertText': {
-                    'location': {'index': max(1, end_index - 1)},
-                    'text': content_to_add
+                    'location': {
+                        'index': 1
+                    },
+                    'text': content
                 }
-            }]
-
-            # Execute the append
-            docs_service.documents().batchUpdate(
-                documentId=document_id,
-                body={'requests': requests}
-            ).execute()
-
-            action_result = "appended to existing document"
-        else:  # Create new document
-            document = {'title': base_doc_title}
-            doc = docs_service.documents().create(body=document).execute()
-            document_id = doc.get('documentId')
-
-            # Add initial content with timestamp
-            initial_text = f"Document created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n{content}"
-            requests = [{
-                'insertText': {
-                    'location': {'index': 1},
-                    'text': initial_text
-                }
-            }]
-
-            docs_service.documents().batchUpdate(
-                documentId=document_id,
-                body={'requests': requests}
-            ).execute()
-
-            action_result = "saved to new document"
-
+            }
+        ]
+        
+        docs_service.documents().batchUpdate(
+            documentId=document_id,
+            body={'requests': requests}
+        ).execute()
+        
         # Get the document URL
         doc_url = f"https://docs.google.com/document/d/{document_id}/edit"
         
         return {
             "status": "success",
             "document_id": document_id,
-            "document_url": doc_url,
-            "message": f"Successfully {action_result}",
-            "is_new_document": action_result == "saved to new document"
+            "document_url": doc_url
         }
     except Exception as e:
+        print(f"Error saving to docs: {e}")
         return {
             "status": "error",
             "message": str(e)
