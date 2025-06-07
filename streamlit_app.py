@@ -281,7 +281,7 @@ def render_chat_interface():
             # Save reply interface after the chat messages
             if st.session_state.current_response:
                 with st.expander("Save Reply Tool", expanded=False):
-                    st.subheader("Save Reply to Google Docs")
+                    st.subheader("Save Reply")
                     
                     col1, col2 = st.columns([0.3, 0.7])
                     with col1:
@@ -305,42 +305,22 @@ def render_chat_interface():
                     )
                     
                     if st.button(
-                        "Save to Google Docs",
-                        key=f"save_docs_{st.session_state.session_id}",
+                        "Save Reply",
+                        key=f"save_reply_{st.session_state.session_id}",
                         use_container_width=True
                     ):
-                        with st.spinner("Saving to Google Docs..."):
+                        with st.spinner("Saving reply..."):
                             try:
-                                docs_service = get_docs_service()
-                                drive_service = get_drive_service()
-                                
-                                # Format content for docs with session ID
-                                content = f"Session: {st.session_state.session_id}\n"
-                                content += f"@{st.session_state.client_name} - {st.session_state.current_question}\n\n"
-                                content += f"@Reply - {edited_reply}"
-                                
-                                # Save to docs
-                                result = save_to_docs(
-                                    docs_service,
-                                    drive_service,
-                                    st.session_state.client_name,
-                                    content
-                                )
-                                
-                                if result["status"] == "success":
-                                    # Update the final reply in sheets
-                                    st.session_state.chat_history[-1]["final_reply"] = edited_reply
-                                    sheet_service = get_sheet_service()
-                                    if sheet_service:
-                                        save_interaction_to_sheets(
-                                            sheet_service,
-                                            st.session_state.client_name,
-                                            st.session_state.chat_history[-1]
-                                        )
-                                    st.success(f"Saved to Google Docs - [View Document]({result['document_url']})")
-                                else:
-                                    st.error(f"Error saving to docs: {result['message']}")
-                                    
+                                # Update the final reply in sheets
+                                st.session_state.chat_history[-1]["final_reply"] = edited_reply
+                                sheet_service = get_sheet_service()
+                                if sheet_service:
+                                    save_interaction_to_sheets(
+                                        sheet_service,
+                                        st.session_state.client_name,
+                                        st.session_state.chat_history[-1]
+                                    )
+                                st.success("Reply saved successfully!")
                             except Exception as e:
                                 st.error(f"Error saving reply: {e}")
     else:
