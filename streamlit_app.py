@@ -30,135 +30,141 @@ st.set_page_config(
 # Configure Streamlit theme
 st.markdown("""
     <style>
-        /* Modern Color Scheme - Fresh Green Theme */
+        /* Modern Color Scheme - Coral Gradient Theme */
         :root {
-            --primary-green: #4CAF50;
-            --light-green: #8BC34A;
-            --pale-green: #F1F8E9;
-            --accent-green: #00E676;
-            --background-color: #FFFFFF;
-            --text-primary: #2E3440;
-            --text-secondary: #4C566A;
-            --shadow-color: rgba(0, 0, 0, 0.05);
+            --primary-gradient: linear-gradient(135deg, #FF7B89 0%, #FFB26B 100%);
+            --background-gradient: linear-gradient(180deg, #FFE5E5 0%, #FFF0E5 100%);
+            --accent-coral: #FF7B89;
+            --accent-peach: #FFB26B;
+            --text-primary: #2D3436;
+            --text-secondary: #636E72;
+            --white: #FFFFFF;
+            --shadow-color: rgba(255, 123, 137, 0.1);
         }
 
         /* Main App Styling */
         .stApp {
-            background: var(--background-color);
+            background: var(--background-gradient);
         }
 
         /* Hide default elements */
         .stDeployButton {display:none;}
         .stToolbar {display:none;}
-        .stSpinner > div > div {border-top-color: var(--primary-green);}
+        .stSpinner > div > div {border-top-color: var(--accent-coral);}
         .stApp > header {display:none;}
 
         /* Typography */
         .stMarkdown {
             max-width: 100%;
             color: var(--text-primary);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            letter-spacing: -0.2px;
         }
 
         /* Buttons */
         .stButton > button {
             width: 100%;
-            background: var(--primary-green) !important;
-            color: white !important;
+            background: var(--primary-gradient) !important;
+            color: var(--white) !important;
             border: none !important;
-            border-radius: 12px !important;
-            padding: 12px 24px !important;
-            font-weight: 500 !important;
-            letter-spacing: 0.3px !important;
-            transition: all 0.2s ease !important;
-            box-shadow: 0 2px 6px var(--shadow-color) !important;
+            border-radius: 16px !important;
+            padding: 14px 28px !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.2px !important;
+            transition: all 0.3s ease !important;
+            box-shadow: 0 8px 20px var(--shadow-color) !important;
         }
         .stButton > button:hover {
-            transform: translateY(-1px);
-            background: var(--light-green) !important;
-            box-shadow: 0 4px 12px var(--shadow-color) !important;
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px var(--shadow-color) !important;
         }
 
         /* Radio Buttons */
         div.row-widget.stRadio > div {
             flex-direction: row;
-            background: var(--pale-green);
+            background: var(--white);
             padding: 16px;
-            border-radius: 12px;
+            border-radius: 16px;
             gap: 12px;
+            box-shadow: 0 4px 12px var(--shadow-color);
         }
 
         /* Chat Messages */
         .stChatMessage {
-            background: var(--pale-green) !important;
-            border-radius: 16px !important;
-            padding: 20px !important;
-            margin: 12px 0 !important;
-            border: 1px solid rgba(139, 195, 74, 0.2) !important;
-            box-shadow: 0 2px 8px var(--shadow-color) !important;
+            background: var(--white) !important;
+            border-radius: 20px !important;
+            padding: 24px !important;
+            margin: 16px 0 !important;
+            box-shadow: 0 4px 16px var(--shadow-color) !important;
+            border: none !important;
         }
 
         /* User Message */
         .stChatMessage [data-testid="chatAvatarIcon-user"] {
-            background: var(--light-green) !important;
+            background: var(--primary-gradient) !important;
         }
 
         /* Assistant Message */
         .stChatMessage [data-testid="chatAvatarIcon-assistant"] {
-            background: var(--primary-green) !important;
+            background: var(--primary-gradient) !important;
         }
 
         /* Input Fields */
         .stTextInput > div > div {
-            background: white !important;
-            border-radius: 12px !important;
-            border: 1px solid rgba(139, 195, 74, 0.3) !important;
-            padding: 12px !important;
+            background: var(--white) !important;
+            border-radius: 16px !important;
+            border: 2px solid transparent !important;
+            padding: 14px !important;
             color: var(--text-primary) !important;
-            box-shadow: 0 2px 6px var(--shadow-color) !important;
+            box-shadow: 0 4px 12px var(--shadow-color) !important;
+            transition: all 0.3s ease !important;
         }
         .stTextInput > div > div:focus-within {
-            border-color: var(--primary-green) !important;
-            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2) !important;
+            border-color: var(--accent-coral) !important;
+            box-shadow: 0 8px 16px var(--shadow-color) !important;
+            transform: translateY(-1px);
         }
 
         /* Text Area */
         .stTextArea > div > div {
-            background: white !important;
-            border-radius: 12px !important;
-            border: 1px solid rgba(139, 195, 74, 0.3) !important;
+            background: var(--white) !important;
+            border-radius: 16px !important;
+            border: 2px solid transparent !important;
             color: var(--text-primary) !important;
-            box-shadow: 0 2px 6px var(--shadow-color) !important;
+            box-shadow: 0 4px 12px var(--shadow-color) !important;
+            transition: all 0.3s ease !important;
         }
         .stTextArea > div > div:focus-within {
-            border-color: var(--primary-green) !important;
-            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2) !important;
+            border-color: var(--accent-coral) !important;
+            box-shadow: 0 8px 16px var(--shadow-color) !important;
+            transform: translateY(-1px);
         }
 
         /* Expander */
         .streamlit-expanderHeader {
-            background: var(--pale-green) !important;
-            border-radius: 12px !important;
-            border: 1px solid rgba(139, 195, 74, 0.2) !important;
+            background: var(--white) !important;
+            border-radius: 16px !important;
+            border: none !important;
             color: var(--text-primary) !important;
-            font-weight: 500 !important;
+            font-weight: 600 !important;
+            box-shadow: 0 4px 12px var(--shadow-color) !important;
         }
         .streamlit-expanderContent {
-            background: white !important;
-            border-radius: 0 0 12px 12px !important;
-            border: 1px solid rgba(139, 195, 74, 0.2) !important;
-            border-top: none !important;
+            background: var(--white) !important;
+            border-radius: 0 0 16px 16px !important;
+            border: none !important;
             color: var(--text-primary) !important;
+            box-shadow: 0 4px 12px var(--shadow-color) !important;
         }
 
         /* Sidebar */
         .css-1d391kg {
-            background: white;
-            border-right: 1px solid rgba(139, 195, 74, 0.2);
+            background: var(--white);
+            box-shadow: 4px 0 12px var(--shadow-color);
         }
         [data-testid="stSidebar"] {
-            background: white;
-            border-right: 1px solid rgba(139, 195, 74, 0.2);
+            background: var(--white);
+            box-shadow: 4px 0 12px var(--shadow-color);
         }
         [data-testid="stSidebar"] .stMarkdown {
             color: var(--text-primary);
@@ -166,72 +172,98 @@ st.markdown("""
 
         /* Progress Bar */
         .stProgress > div > div > div {
-            background: linear-gradient(to right, var(--light-green), var(--primary-green)) !important;
+            background: var(--primary-gradient) !important;
         }
         .stProgress .st-bo {
-            background-color: rgba(139, 195, 74, 0.1);
+            background-color: rgba(255, 123, 137, 0.1);
         }
 
         /* Success/Error Messages */
         .stSuccess {
-            background: var(--pale-green) !important;
-            color: var(--primary-green) !important;
-            border-radius: 12px !important;
+            background: linear-gradient(135deg, #A8E6CF 0%, #88D8B0 100%) !important;
+            color: #1B4332 !important;
+            border-radius: 16px !important;
             padding: 16px !important;
-            border: 1px solid rgba(139, 195, 74, 0.3) !important;
+            box-shadow: 0 4px 12px rgba(168, 230, 207, 0.3) !important;
         }
         .stError {
-            background: #FFEBEE !important;
-            color: #D32F2F !important;
-            border-radius: 12px !important;
+            background: linear-gradient(135deg, #FFB5B5 0%, #FF9B9B 100%) !important;
+            color: #7D1A1A !important;
+            border-radius: 16px !important;
             padding: 16px !important;
-            border: 1px solid rgba(211, 47, 47, 0.3) !important;
+            box-shadow: 0 4px 12px rgba(255, 181, 181, 0.3) !important;
         }
 
         /* Chat Input */
         .stChatInputContainer {
-            background: white !important;
-            border-radius: 12px !important;
-            border: 1px solid rgba(139, 195, 74, 0.3) !important;
+            background: var(--white) !important;
+            border-radius: 16px !important;
+            border: 2px solid transparent !important;
             padding: 8px !important;
-            box-shadow: 0 2px 6px var(--shadow-color) !important;
+            box-shadow: 0 4px 12px var(--shadow-color) !important;
+            transition: all 0.3s ease !important;
+        }
+        .stChatInputContainer:focus-within {
+            border-color: var(--accent-coral) !important;
+            box-shadow: 0 8px 16px var(--shadow-color) !important;
+            transform: translateY(-1px);
         }
 
         /* Scrollbar */
         ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+            width: 8px;
+            height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: var(--pale-green);
-            border-radius: 3px;
+            background: rgba(255, 123, 137, 0.1);
+            border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb {
-            background: var(--light-green);
-            border-radius: 3px;
+            background: linear-gradient(180deg, #FF7B89 0%, #FFB26B 100%);
+            border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: var(--primary-green);
+            background: linear-gradient(180deg, #FF8F9B 0%, #FFC088 100%);
         }
 
         /* Additional Modern UI Elements */
         .stSelectbox {
-            border-radius: 12px !important;
+            border-radius: 16px !important;
         }
         .stSelectbox > div > div {
-            background: white !important;
-            border: 1px solid rgba(139, 195, 74, 0.3) !important;
-            box-shadow: 0 2px 6px var(--shadow-color) !important;
+            background: var(--white) !important;
+            border: 2px solid transparent !important;
+            box-shadow: 0 4px 12px var(--shadow-color) !important;
+            transition: all 0.3s ease !important;
+        }
+        .stSelectbox > div > div:focus-within {
+            border-color: var(--accent-coral) !important;
+            box-shadow: 0 8px 16px var(--shadow-color) !important;
+            transform: translateY(-1px);
         }
         
         /* Animations */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        @keyframes fadeInUp {
+            from { 
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .stChatMessage {
-            animation: fadeIn 0.3s ease-out;
+            animation: fadeInUp 0.4s ease-out;
+        }
+
+        /* Title and Headers */
+        h1, h2, h3 {
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
         }
     </style>
 """, unsafe_allow_html=True)
