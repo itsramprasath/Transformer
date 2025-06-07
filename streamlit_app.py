@@ -30,14 +30,143 @@ st.set_page_config(
 # Configure Streamlit theme
 st.markdown("""
     <style>
+        /* Modern Color Scheme */
+        :root {
+            --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --secondary-gradient: linear-gradient(135deg, #3b82f6 0%, #2dd4bf 100%);
+            --accent-gradient: linear-gradient(135deg, #f43f5e 0%, #f97316 100%);
+            --background-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            --text-color: #1e293b;
+        }
+
+        /* Main App Styling */
+        .stApp {
+            background: var(--background-gradient);
+        }
+
+        /* Hide default elements */
         .stDeployButton {display:none;}
         .stToolbar {display:none;}
         .stSpinner > div > div {border-top-color: transparent;}
         .stApp > header {display:none;}
-        .stMarkdown {max-width: 100%;}
-        .stButton > button {width: 100%;}
-        div.row-widget.stRadio > div {flex-direction: row;}
-        .stProgress .st-bo {background-color: transparent;}
+
+        /* Typography */
+        .stMarkdown {
+            max-width: 100%;
+            color: var(--text-color);
+        }
+
+        /* Buttons */
+        .stButton > button {
+            width: 100%;
+            background: var(--primary-gradient) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 8px !important;
+            transition: all 0.3s ease !important;
+        }
+        .stButton > button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+        }
+
+        /* Radio Buttons */
+        div.row-widget.stRadio > div {
+            flex-direction: row;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Chat Messages */
+        .stChatMessage {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 10px 0;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        /* User Message */
+        .stChatMessage [data-testid="chatAvatarIcon-user"] {
+            background: var(--secondary-gradient) !important;
+        }
+
+        /* Assistant Message */
+        .stChatMessage [data-testid="chatAvatarIcon-assistant"] {
+            background: var(--primary-gradient) !important;
+        }
+
+        /* Input Fields */
+        .stTextInput > div > div {
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 8px;
+        }
+        .stTextInput > div > div:focus-within {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        /* Expander */
+        .streamlit-expanderHeader {
+            background: white !important;
+            border-radius: 8px !important;
+            border: 1px solid #e2e8f0 !important;
+        }
+        .streamlit-expanderContent {
+            background: white !important;
+            border-radius: 0 0 8px 8px !important;
+            border: 1px solid #e2e8f0 !important;
+            border-top: none !important;
+        }
+
+        /* Sidebar */
+        .css-1d391kg {
+            background: white;
+            border-right: 1px solid #e2e8f0;
+        }
+
+        /* Progress Bar */
+        .stProgress > div > div > div {
+            background: var(--primary-gradient) !important;
+        }
+        .stProgress .st-bo {
+            background-color: transparent;
+        }
+
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 8px;
+        }
+        .stTabs [data-baseweb="tab"] {
+            height: 40px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 8px 16px;
+        }
+        .stTabs [aria-selected="true"] {
+            background: var(--primary-gradient) !important;
+            color: white !important;
+            border: none !important;
+        }
+
+        /* Success/Error Messages */
+        .stSuccess {
+            background: linear-gradient(135deg, #22c55e 0%, #10b981 100%);
+            color: white;
+            border-radius: 8px;
+            padding: 8px 16px;
+        }
+        .stError {
+            background: var(--accent-gradient);
+            color: white;
+            border-radius: 8px;
+            padding: 8px 16px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
