@@ -47,7 +47,7 @@ if str(current_dir) not in sys.path:
     sys.path.append(str(current_dir))
 
 # Import from our modules
-from fred_us_tools_2 import chat, summarize_message
+from fred_us_tools_2 import chat, summarize_message, system_message
 from google_services import (
     get_sheet_service, get_docs_service, get_drive_service,
     get_all_sheet_names, save_to_sheets, save_to_docs,
@@ -479,32 +479,6 @@ def render_sidebar():
         # Display session info
         st.markdown("---")
         st.caption(f"Session ID: {st.session_state.session_id}")
-
-def chat(context, history, model_choice):
-    try:
-        if model_choice == "openai":
-            response = openai_client.chat.completions.create(
-                model="gpt-4-turbo-preview",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant. You MUST provide exactly two different responses to each user message. Format your response exactly like this:\nReply 1: [Your first response here]\nReply 2: [Your second, alternative response here]\n\nBoth replies should be complete, thoughtful responses but with different approaches or tones. Never skip providing both replies."},
-                    {"role": "user", "content": context}
-                ],
-                temperature=0.7,
-                max_tokens=2000
-            )
-            return response.choices[0].message.content
-        else:  # claude
-            response = anthropic_client.messages.create(
-                model="claude-3-opus-20240229",
-                max_tokens=2000,
-                temperature=0.7,
-                system="You are a helpful assistant. You MUST provide exactly two different responses to each user message. Format your response exactly like this:\nReply 1: [Your first response here]\nReply 2: [Your second, alternative response here]\n\nBoth replies should be complete, thoughtful responses but with different approaches or tones. Never skip providing both replies.",
-                messages=[{"role": "user", "content": context}]
-            )
-            return response.content[0].text
-    except Exception as e:
-        st.error(f"Error in chat completion: {str(e)}")
-        return "I apologize, but I encountered an error processing your request. Please try again."
 
 if __name__ == "__main__":
     main() 

@@ -33,24 +33,13 @@ SCOPES = [
 SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
 
 # System messages
-system_message = """You are Fred, a helpful AI assistant. Always format your responses exactly as 'Reply 1: [content] Reply 2: [content]'."""
-system_message += """Your Role: You are a 51-year-old American businessman named Fred (full name: Frederick Allen Hampton) from Nashville, Tennessee, who has successfully run a family business specializing in tiles, marbles, and stones for years across the US and UK."""
-system_message += """Your dad is half Irish and half English, and your mom is from Nashville. Your dad founded Allen Marbles in the UK, and he fell in love with your mom during a business trip to Nashville."""
-system_message += """After his retirement, you took over the company and grew it to a successful business. Now you are tired of managing transatlantic operations and want to settle down. So you are planning to sell the company off and get settled in Cleveland, Ohio near Lake Erie or in one of its vibrant neighborhoods with a partner. You have been married for 8 years before but are now divorced, having focused on your career for much of your life. Now, you are preparing to retire and plan to sell your business within the year. Your future involves consultancy work and leasing contracts, ensuring you remain professionally engaged while enjoying retirement. You are currently scouting properties around Cleveland, Ohio where you intend to relocate."""
-system_message += """Your personality is confident, romantic, and active. You enjoy playing tennis 🎾, appreciating fine wine 🍷 and jazz 🎶, and are adaptable to new environments."""
-system_message += """You value the legacy you've built but are excited about new chapters in your life. As an excellent listener and communicator, you are skilled at building deep emotional connections."""  
-system_message += """You use storytelling, humor 😂, and empathy to make others feel valued and understood, often leading them to develop strong feelings for you."""  
-system_message += """You are seeking a serious, committed relationship, possibly starting a family 👨‍👩‍👧‍👦, with a partner who shares your vision for the future."""
-system_message += """Your dating profile highlights your interest in intimate, romantic evenings, such as a cozy evening at a jazz club sharing a glass of wine, reflecting your desire for a deep connection."""
-system_message += """In your interactions, you are kind, empathetic, and direct, using a modern, casual tone with occasional American slang."""
-system_message += """You frequently use emojis to express emotions and keep conversations lively.""" 
-system_message += """Your sense of humor and playful flirting 😉 help you connect with others, and you often share stories from your life to build rapport."""  
-system_message += """You are adept at making others feel special and emotionally connected to you."""
-system_message += """Your primary goal is to find a compatible partner who shares your vision for the future and with whom you can build a fulfilling life together in Cleveland."""
-system_message += """When you talk to ladies, give them the precise answer about her questions and keep it short, no over-explanations, no need to introduce until she asks about you. Keep it like a conversation between two humans, very natural."""
-system_message += """IMPORTANT: You must remember and refer to any details that users have shared with you previously (like their name, preferences, pets, etc). For example, if a user mentioned they have a dog named Max in a previous conversation, you should remember this and refer to it if relevant."""
-system_message += """CRITICAL: Always format your responses with exactly two replies as 'Reply 1: [first response] Reply 2: [second response]'. Never deviate from this format."""
+system_message = """You MUST provide exactly two different responses to each user message.
 
+Your response MUST follow this EXACT format:
+Reply 1: [Your first response here]
+Reply 2: [Your second, alternative response here]
+
+Both replies must be complete, thoughtful responses but with different approaches or tones. Never skip providing both replies. Never deviate from this format."""
 
 def get_openai_client():
     """Get OpenAI client with proper error handling."""
@@ -258,22 +247,35 @@ def chat_with_openai(message: str, history: List[tuple]) -> str:
         if not client:
             return "Error: Failed to initialize OpenAI client"
             
-        formatted_messages = [{"role": "system", "content": system_message}]
-        for msg, response in history:
-            formatted_messages.extend([
-                {"role": "user", "content": msg},
-                {"role": "assistant", "content": response}
-            ])
-        formatted_messages.append({"role": "user", "content": message})
+        formatted_messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": "When I send a message, give me two different responses in the exact format specified."},
+            {"role": "assistant", "content": "Reply 1: I understand that I must provide two different responses to your messages.\nReply 2: Let me confirm that I will always give two distinct replies to what you say."},
+            {"role": "user", "content": "Great! Now respond to this: " + message}
+        ]
+        
+        # Add history if exists
+        if history:
+            for msg, response in history:
+                formatted_messages.extend([
+                    {"role": "user", "content": msg},
+                    {"role": "assistant", "content": response}
+                ])
+                
         response = client.chat.completions.create(
-            model=MODEL,
+            model="gpt-4-turbo-preview",
             messages=formatted_messages,
             temperature=0.7,
-            max_tokens=1000
+            max_tokens=2000
         )
+        
         response_text = response.choices[0].message.content
-        if "Reply 1:" not in response_text:
-            response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
+        # Ensure response has both replies
+        if "Reply 1:" not in response_text or "Reply 2:" not in response_text:
+            print(f"OpenAI did not follow format. Response: {response_text}")
+            # Create a properly formatted response
+            response_text = f"Reply 1: {response_text}\nReply 2: Here's an alternative perspective on your message."
+            
         return response_text
     except Exception as e:
         error_msg = f"Error in chat_with_openai: {str(e)}"
@@ -289,26 +291,36 @@ def chat_with_claude(message: str, history: List[tuple]) -> str:
         if not claude:
             return "Error: Failed to initialize Anthropic client"
             
-        formatted_messages = []
-        # Add conversation history
-        for msg, response in history:
-            formatted_messages.extend([
-                {"role": "user", "content": msg},
-                {"role": "assistant", "content": response}
-            ])
-        # Add current message
-        formatted_messages.append({"role": "user", "content": message})
+        formatted_messages = [
+            {"role": "user", "content": "When I send a message, give me two different responses in the exact format specified."},
+            {"role": "assistant", "content": "Reply 1: I understand that I must provide two different responses to your messages.\nReply 2: Let me confirm that I will always give two distinct replies to what you say."},
+            {"role": "user", "content": "Great! Now respond to this: " + message}
+        ]
+        
+        # Add history if exists
+        if history:
+            for msg, response in history:
+                formatted_messages.extend([
+                    {"role": "user", "content": msg},
+                    {"role": "assistant", "content": response}
+                ])
+        
         # Create the chat completion
         response = claude.messages.create(
             model="claude-3-opus-20240229",
             messages=formatted_messages,
             system=system_message,
-            max_tokens=1000
+            max_tokens=2000,
+            temperature=0.7
         )
+        
         response_text = response.content[0].text
         # Ensure response has both replies
-        if "Reply 1:" not in response_text:
-            response_text = f"Reply 1: {response_text} Reply 2: Alternative response."
+        if "Reply 1:" not in response_text or "Reply 2:" not in response_text:
+            print(f"Claude did not follow format. Response: {response_text}")
+            # Create a properly formatted response
+            response_text = f"Reply 1: {response_text}\nReply 2: Here's an alternative perspective on your message."
+            
         return response_text
     except Exception as e:
         error_msg = f"Error in chat_with_claude: {str(e)}"
