@@ -213,7 +213,9 @@ def handle_chat_input(prompt):
         st.error(f"Error saving to sheets: {e}")
 
 def render_chat_interface():
-    if st.session_state.client_initialized:
+    if st.session_state.show_history:
+        render_chat_history_viewer()
+    elif st.session_state.client_initialized:
         st.title(f"Conversation with {st.session_state.client_name}")
         
         # Chat container for better performance
@@ -360,7 +362,9 @@ def initialize_session_state():
         'current_response': None,
         'model_choice': "openai",
         'client_initialized': False,
-        'needs_update': False
+        'needs_update': False,
+        'show_history': False,
+        'current_page': 0
     }
     
     for key, default_value in defaults.items():
@@ -460,6 +464,18 @@ def render_sidebar():
         if model != st.session_state.model_choice:
             st.session_state.model_choice = model
         
+        # Chat History Viewer
+        if st.session_state.client_initialized:
+            st.subheader("Chat History")
+            view_history = st.button(
+                "View Past Conversations",
+                key="view_history",
+                use_container_width=True
+            )
+            if view_history:
+                st.session_state.show_history = True
+                st.session_state.current_page = 0
+        
         # Action buttons
         st.button(
             "Clear Chat",
@@ -476,6 +492,130 @@ def render_sidebar():
         # Display session info
         st.markdown("---")
         st.caption(f"Session ID: {st.session_state.session_id}")
+
+def render_chat_history_viewer():
+    """Render the chat history viewer interface"""
+    st.title(f"Chat History - {st.session_state.client_name}")
+    
+    # Get all chat history
+    chat_history = st.session_state.chat_history
+    
+    # Add date filter
+    col1, col2 = st.columns(2)
+    with col1:
+        # Get unique dates from chat history
+        dates = sorted(list(set(
+            datetime.strptime(interaction['timestamp'].split()[0], '%Y-%m-%d').date()
+            for interaction in chat_history
+        )), reverse=True)
+        
+        selected_date = st.selectbox(
+            "Select Date",
+            ["All"] + [date.strftime('%Y-%m-%d') for date in dates],
+            key="history_date_filter"
+        )
+    
+    with col2:
+        search_query = st.text_input(
+            "Search Messages",
+            key="history_search"
+        ).lower()
+    
+    # Filter chat history
+    filtered_history = chat_history
+    if selected_date != "All":
+        filtered_history = [
+            interaction for interaction in filtered_history
+            if interaction['timestamp'].startswith(selected_date)
+        ]
+    
+    if search_query:
+        filtered_history = [
+            interaction for interaction in filtered_history
+            if search_query in interaction['user_message'].lower() or
+            search_query in interaction['bot_reply'].lower()
+        ]
+    
+    # Display conversations in pages
+    ITEMS_PER_PAGE = 5
+    total_pages = (len(filtered_history) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
+    
+    if total_pages > 0:
+        page_col1, page_col2, page_col3 = st.columns([1, 3, 1])
+        with page_col1:
+            if st.button("Previous", disabled=st.session_state.current_page <= 0):
+                st.session_state.current_page -= 1
+        with page_col2:
+            st.write(f"Page {st.session_state.current_page + 1} of {total_pages}")
+        with page_col3:
+            if st.button("Next", disabled=st.session_state.current_page >= total_pages - 1):
+                st.session_state.current_page += 1
+        
+        start_idx = st.session_state.current_page * ITEMS_PER_PAGE
+        end_idx = min(start_idx + ITEMS_PER_PAGE, len(filtered_history))
+        
+        for interaction in filtered_history[start_idx:end_idx]:
+            with st.expander(f"Conversation from {interaction['timestamp']}", expanded=True):
+                st.markdown("**User Message:**")
+                st.write(interaction['user_message'])
+                st.markdown("**AI Response:**")
+                st.write(interaction['bot_reply'])
+                if interaction.get('summary'):
+                    st.markdown("**Summary:**")
+                    st.write(interaction['summary'])
+                st.divider()
+    else:
+        st.info("No conversations found for the selected filters.")
+    
+    # Add export options
+    st.subheader("Export Options")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Export to CSV", use_container_width=True):
+            # Convert filtered history to CSV
+            csv_data = []
+            for interaction in filtered_history:
+                csv_data.append({
+                    'Timestamp': interaction['timestamp'],
+                    'User Message': interaction['user_message'],
+                    'AI Response': interaction['bot_reply'],
+                    'Summary': interaction.get('summary', '')
+                })
+            
+            # Create DataFrame and convert to CSV
+            import pandas as pd
+            df = pd.DataFrame(csv_data)
+            csv = df.to_csv(index=False)
+            
+            # Create download button
+            st.download_button(
+                "Download CSV",
+                csv,
+                f"{st.session_state.client_name}_chat_history.csv",
+                "text/csv",
+                key='download-csv'
+            )
+    
+    with col2:
+        if st.button("Export to Text", use_container_width=True):
+            # Convert filtered history to formatted text
+            text_content = f"Chat History for {st.session_state.client_name}\n\n"
+            for interaction in filtered_history:
+                text_content += f"Time: {interaction['timestamp']}\n"
+                text_content += f"User: {interaction['user_message']}\n"
+                text_content += f"AI: {interaction['bot_reply']}\n"
+                if interaction.get('summary'):
+                    text_content += f"Summary: {interaction['summary']}\n"
+                text_content += "-" * 80 + "\n\n"
+            
+            # Create download button
+            st.download_button(
+                "Download Text",
+                text_content,
+                f"{st.session_state.client_name}_chat_history.txt",
+                "text/plain",
+                key='download-txt'
+            )
 
 if __name__ == "__main__":
     main() 
