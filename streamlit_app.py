@@ -649,7 +649,7 @@ def render_chat_history_viewer():
         filtered_history = [
             interaction for interaction in filtered_history
             if search_query in interaction['user_message'].lower() or
-            search_query in interaction['bot_reply'].lower()
+            search_query in (interaction.get('final_reply', '') or interaction['bot_reply']).lower()
         ]
     
     # Display conversations in pages
@@ -672,10 +672,26 @@ def render_chat_history_viewer():
         
         for interaction in filtered_history[start_idx:end_idx]:
             with st.expander(f"Conversation from {interaction['timestamp']}", expanded=True):
+                # User Message
                 st.markdown("**User Message:**")
                 st.write(interaction['user_message'])
+                
+                # AI Response
                 st.markdown("**AI Response:**")
-                st.write(interaction['bot_reply'])
+                if interaction.get('final_reply'):
+                    # Show the final selected and saved reply
+                    st.write(interaction['final_reply'])
+                else:
+                    # If no final reply exists, show original response
+                    st.write(interaction['bot_reply'])
+                
+                # Show original replies in collapsed section
+                with st.expander("Show Original Replies", expanded=False):
+                    st.markdown("**Reply 1:**")
+                    st.write(interaction.get('reply1', 'Not available'))
+                    st.markdown("**Reply 2:**")
+                    st.write(interaction.get('reply2', 'Not available'))
+                
                 if interaction.get('summary'):
                     st.markdown("**Summary:**")
                     st.write(interaction['summary'])
