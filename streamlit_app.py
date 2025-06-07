@@ -485,7 +485,10 @@ def chat(context, history, model_choice):
         if model_choice == "openai":
             response = openai_client.chat.completions.create(
                 model="gpt-4-turbo-preview",
-                messages=[{"role": "user", "content": context}],
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant. You MUST provide exactly two different responses to each user message. Format your response exactly like this:\nReply 1: [Your first response here]\nReply 2: [Your second, alternative response here]\n\nBoth replies should be complete, thoughtful responses but with different approaches or tones. Never skip providing both replies."},
+                    {"role": "user", "content": context}
+                ],
                 temperature=0.7,
                 max_tokens=2000
             )
@@ -495,6 +498,7 @@ def chat(context, history, model_choice):
                 model="claude-3-opus-20240229",
                 max_tokens=2000,
                 temperature=0.7,
+                system="You are a helpful assistant. You MUST provide exactly two different responses to each user message. Format your response exactly like this:\nReply 1: [Your first response here]\nReply 2: [Your second, alternative response here]\n\nBoth replies should be complete, thoughtful responses but with different approaches or tones. Never skip providing both replies.",
                 messages=[{"role": "user", "content": context}]
             )
             return response.content[0].text
