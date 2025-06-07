@@ -495,6 +495,13 @@ def render_sidebar():
 
 def render_chat_history_viewer():
     """Render the chat history viewer interface"""
+    # Add Back to Chat button at the top
+    col1, col2 = st.columns([0.2, 0.8])
+    with col1:
+        if st.button("← Back to Chat", use_container_width=True):
+            st.session_state.show_history = False
+            st.rerun()
+    
     st.title(f"Chat History - {st.session_state.client_name}")
     
     # Get all chat history
