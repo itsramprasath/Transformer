@@ -670,7 +670,7 @@ def render_chat_history_viewer():
         start_idx = st.session_state.current_page * ITEMS_PER_PAGE
         end_idx = min(start_idx + ITEMS_PER_PAGE, len(filtered_history))
         
-        for interaction in filtered_history[start_idx:end_idx]:
+        for idx, interaction in enumerate(filtered_history[start_idx:end_idx]):
             with st.expander(f"Conversation from {interaction['timestamp']}", expanded=True):
                 # User Message
                 st.markdown("**User Message:**")
@@ -685,8 +685,16 @@ def render_chat_history_viewer():
                     # If no final reply exists, show original response
                     st.write(interaction['bot_reply'])
                 
-                # Show original replies in collapsed section
-                with st.expander("Show Original Replies", expanded=False):
+                # Show original replies in a container instead of expander
+                st.markdown("**Original Replies:**")
+                toggle_key = f"show_original_{idx}"
+                if toggle_key not in st.session_state:
+                    st.session_state[toggle_key] = False
+                
+                if st.button("Toggle Original Replies", key=f"toggle_{idx}"):
+                    st.session_state[toggle_key] = not st.session_state[toggle_key]
+                
+                if st.session_state[toggle_key]:
                     st.markdown("**Reply 1:**")
                     st.write(interaction.get('reply1', 'Not available'))
                     st.markdown("**Reply 2:**")
@@ -710,7 +718,7 @@ def render_chat_history_viewer():
                 csv_data.append({
                     'Timestamp': interaction['timestamp'],
                     'User Message': interaction['user_message'],
-                    'AI Response': interaction['bot_reply'],
+                    'AI Response': interaction.get('final_reply', interaction['bot_reply']),
                     'Summary': interaction.get('summary', '')
                 })
             
@@ -735,7 +743,7 @@ def render_chat_history_viewer():
             for interaction in filtered_history:
                 text_content += f"Time: {interaction['timestamp']}\n"
                 text_content += f"User: {interaction['user_message']}\n"
-                text_content += f"AI: {interaction['bot_reply']}\n"
+                text_content += f"AI: {interaction.get('final_reply', interaction['bot_reply'])}\n"
                 if interaction.get('summary'):
                     text_content += f"Summary: {interaction['summary']}\n"
                 text_content += "-" * 80 + "\n\n"
