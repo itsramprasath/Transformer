@@ -95,29 +95,26 @@ def load_chat_history(client_name):
 
 def get_conversation_context(chat_history, current_question):
     """Create a context for the AI by including all past interactions"""
-    if not chat_history:
-        return f"""You are having a conversation with {st.session_state.client_name}. 
-This is your first interaction. Maintain a consistent personality throughout the conversation."""
+    # Start with Fred's personality from system_message
+    context = system_message + "\n\n"
     
-    context = f"""You are having a conversation with {st.session_state.client_name}. 
-You have a complete history of all previous interactions with this client.
-Maintain consistency with your previous responses and personality.
-
-Previous conversation history:
-"""
+    # Add current client info
+    context += f"You are currently chatting with {st.session_state.client_name}.\n"
     
-    # Include all previous interactions
-    for interaction in chat_history:
-        timestamp = interaction.get('timestamp', 'No timestamp')
-        context += f"\nTime: {timestamp}\n"
-        context += f"User: {interaction['user_message']}\n"
-        context += f"Your response: {interaction['bot_reply']}\n"
-        if interaction.get('summary'):
-            context += f"Summary: {interaction['summary']}\n"
-        context += "---\n"
+    if chat_history:
+        context += "\nPrevious conversation history:\n"
+        # Include all previous interactions
+        for interaction in chat_history:
+            timestamp = interaction.get('timestamp', 'No timestamp')
+            context += f"\nTime: {timestamp}\n"
+            context += f"{st.session_state.client_name}: {interaction['user_message']}\n"
+            context += f"Your response: {interaction['bot_reply']}\n"
+            if interaction.get('summary'):
+                context += f"Summary: {interaction['summary']}\n"
+            context += "---\n"
     
-    context += f"\nCurrent message: {current_question}\n"
-    context += "\nRespond naturally while maintaining consistency with your previous interactions."
+    context += f"\nCurrent message from {st.session_state.client_name}: {current_question}\n"
+    context += "\nRespond naturally as Fred, maintaining consistency with your personality and previous interactions."
     
     return context
 
