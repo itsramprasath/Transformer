@@ -30,13 +30,15 @@ st.set_page_config(
 # Configure Streamlit theme
 st.markdown("""
     <style>
-        /* Modern Color Scheme */
+        /* Modern Color Scheme - Mood Diary Theme */
         :root {
-            --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-            --secondary-gradient: linear-gradient(135deg, #3b82f6 0%, #2dd4bf 100%);
-            --accent-gradient: linear-gradient(135deg, #f43f5e 0%, #f97316 100%);
-            --background-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            --text-color: #1e293b;
+            --primary-gradient: linear-gradient(135deg, #2A9D8F 0%, #264653 100%);
+            --secondary-gradient: linear-gradient(135deg, #E9C46A 0%, #F4A261 100%);
+            --accent-gradient: linear-gradient(135deg, #E76F51 0%, #F4A261 100%);
+            --background-gradient: linear-gradient(180deg, #2A9D8F 0%, #264653 100%);
+            --card-gradient: linear-gradient(135deg, #E9C46A 0%, #F4A261 100%);
+            --text-color: #264653;
+            --text-color-light: #2A9D8F;
         }
 
         /* Main App Styling */
@@ -53,39 +55,43 @@ st.markdown("""
         /* Typography */
         .stMarkdown {
             max-width: 100%;
-            color: var(--text-color);
+            color: white;
         }
 
         /* Buttons */
         .stButton > button {
             width: 100%;
-            background: var(--primary-gradient) !important;
-            color: white !important;
+            background: var(--card-gradient) !important;
+            color: var(--text-color) !important;
             border: none !important;
-            border-radius: 8px !important;
+            border-radius: 12px !important;
+            padding: 10px 20px !important;
+            font-weight: 600 !important;
             transition: all 0.3s ease !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
         }
         .stButton > button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
         }
 
         /* Radio Buttons */
         div.row-widget.stRadio > div {
             flex-direction: row;
-            background: white;
-            padding: 10px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            background: rgba(233, 196, 106, 0.1);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(233, 196, 106, 0.2);
         }
 
         /* Chat Messages */
         .stChatMessage {
-            background: white;
-            border-radius: 12px;
-            padding: 15px;
-            margin: 10px 0;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+            background: rgba(233, 196, 106, 0.1) !important;
+            border-radius: 12px !important;
+            padding: 20px !important;
+            margin: 10px 0 !important;
+            border: 1px solid rgba(233, 196, 106, 0.2) !important;
+            backdrop-filter: blur(10px) !important;
         }
 
         /* User Message */
@@ -100,72 +106,100 @@ st.markdown("""
 
         /* Input Fields */
         .stTextInput > div > div {
-            background: white;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-            padding: 8px;
+            background: rgba(233, 196, 106, 0.1) !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(233, 196, 106, 0.2) !important;
+            padding: 12px !important;
+            color: white !important;
         }
         .stTextInput > div > div:focus-within {
-            border-color: #6366f1;
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            border-color: #E9C46A !important;
+            box-shadow: 0 0 0 3px rgba(233, 196, 106, 0.2) !important;
+        }
+
+        /* Text Area */
+        .stTextArea > div > div {
+            background: rgba(233, 196, 106, 0.1) !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(233, 196, 106, 0.2) !important;
+            color: white !important;
+        }
+        .stTextArea > div > div:focus-within {
+            border-color: #E9C46A !important;
+            box-shadow: 0 0 0 3px rgba(233, 196, 106, 0.2) !important;
         }
 
         /* Expander */
         .streamlit-expanderHeader {
-            background: white !important;
-            border-radius: 8px !important;
-            border: 1px solid #e2e8f0 !important;
+            background: rgba(233, 196, 106, 0.1) !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(233, 196, 106, 0.2) !important;
+            color: white !important;
         }
         .streamlit-expanderContent {
-            background: white !important;
-            border-radius: 0 0 8px 8px !important;
-            border: 1px solid #e2e8f0 !important;
+            background: rgba(233, 196, 106, 0.05) !important;
+            border-radius: 0 0 12px 12px !important;
+            border: 1px solid rgba(233, 196, 106, 0.2) !important;
             border-top: none !important;
+            color: white !important;
         }
 
         /* Sidebar */
         .css-1d391kg {
-            background: white;
-            border-right: 1px solid #e2e8f0;
+            background: var(--primary-gradient);
+        }
+        [data-testid="stSidebar"] {
+            background: var(--primary-gradient);
+        }
+        [data-testid="stSidebar"] .stMarkdown {
+            color: white;
         }
 
         /* Progress Bar */
         .stProgress > div > div > div {
-            background: var(--primary-gradient) !important;
+            background: var(--secondary-gradient) !important;
         }
         .stProgress .st-bo {
             background-color: transparent;
         }
 
-        /* Tabs */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
-        }
-        .stTabs [data-baseweb="tab"] {
-            height: 40px;
-            background: white;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-            padding: 8px 16px;
-        }
-        .stTabs [aria-selected="true"] {
-            background: var(--primary-gradient) !important;
-            color: white !important;
-            border: none !important;
-        }
-
         /* Success/Error Messages */
         .stSuccess {
-            background: linear-gradient(135deg, #22c55e 0%, #10b981 100%);
-            color: white;
-            border-radius: 8px;
-            padding: 8px 16px;
+            background: linear-gradient(135deg, #2A9D8F 0%, #264653 100%) !important;
+            color: white !important;
+            border-radius: 12px !important;
+            padding: 12px 20px !important;
         }
         .stError {
-            background: var(--accent-gradient);
-            color: white;
-            border-radius: 8px;
-            padding: 8px 16px;
+            background: var(--accent-gradient) !important;
+            color: white !important;
+            border-radius: 12px !important;
+            padding: 12px 20px !important;
+        }
+
+        /* Chat Input */
+        .stChatInputContainer {
+            background: rgba(233, 196, 106, 0.1) !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(233, 196, 106, 0.2) !important;
+            padding: 8px !important;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(233, 196, 106, 0.1);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(233, 196, 106, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(233, 196, 106, 0.5);
         }
     </style>
 """, unsafe_allow_html=True)
