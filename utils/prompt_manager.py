@@ -128,14 +128,39 @@ def get_random_name_and_emoji():
 def add_system_prompt_manager():
     """Add system prompt management UI to the sidebar"""
     st.sidebar.markdown("---")
-    st.sidebar.subheader("System Prompt Settings")
+    
+    # Simple button in sidebar to trigger configuration
+    if st.sidebar.button("⚙️ Custom GPT", use_container_width=True, help="Configure custom GPT settings"):
+        st.session_state.show_gpt_config = True
+        st.session_state.show_history = False  # Hide history view if open
+    
+    # Show current character info if using custom
+    if st.session_state.using_custom_prompt:
+        st.sidebar.caption(f"Using: {st.session_state.character_name} {st.session_state.character_emoji}")
+
+def render_gpt_config():
+    """Render the GPT configuration interface in the main page"""
+    if not st.session_state.get("show_gpt_config", False):
+        return
+        
+    # Add back button
+    col1, col2 = st.columns([0.2, 0.8])
+    with col1:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.show_gpt_config = False
+            st.rerun()
+    
+    st.title("Custom GPT Configuration")
     
     # Radio button to choose between default and custom prompt
-    prompt_choice = st.sidebar.radio(
+    prompt_choice = st.radio(
         "Choose System Prompt:",
         ["Use Default", "Upload Document", "Enter Custom", "Load Saved Character"],
-        key="prompt_choice"
+        key="prompt_choice",
+        horizontal=True
     )
+    
+    st.divider()
     
     if prompt_choice == "Use Default":
         st.session_state.using_custom_prompt = False
@@ -144,7 +169,7 @@ def add_system_prompt_manager():
         st.session_state.character_emoji = "👨‍💼"
         
     elif prompt_choice == "Upload Document":
-        uploaded_file = st.sidebar.file_uploader(
+        uploaded_file = st.file_uploader(
             "Upload .docx file",
             type=['docx'],
             key="system_prompt_file"
@@ -157,35 +182,37 @@ def add_system_prompt_manager():
                 st.session_state.using_custom_prompt = True
                 
                 # Character name input
-                char_name = st.sidebar.text_input(
-                    "Character Name (optional)",
-                    key="char_name_upload"
-                )
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    char_name = st.text_input(
+                        "Character Name (optional)",
+                        key="char_name_upload"
+                    )
                 
                 if not char_name:
                     char_name, emoji = get_random_name_and_emoji()
-                    st.sidebar.info(f"Using random name: {char_name} {emoji}")
+                    st.info(f"Using random name: {char_name} {emoji}")
                 else:
                     emoji = "🎭"
                 
                 st.session_state.character_name = char_name
                 st.session_state.character_emoji = emoji
                 
-                if st.sidebar.button("Save Character", use_container_width=True):
+                if st.button("Save Character", use_container_width=True, type="primary"):
                     if save_character_to_sheet(char_name, content):
-                        st.sidebar.success(f"Character {char_name} saved!")
+                        st.success(f"Character {char_name} saved!")
                 
                 # Show preview in an expander
-                with st.sidebar.expander("Preview Prompt"):
+                with st.expander("Preview Prompt"):
                     st.write(content)
                     
             except Exception as e:
-                st.sidebar.error(f"Error reading file: {str(e)}")
+                st.error(f"Error reading file: {str(e)}")
                 st.session_state.using_custom_prompt = False
                 st.session_state.custom_system_prompt = None
                 
     elif prompt_choice == "Enter Custom":
-        custom_prompt = st.sidebar.text_area(
+        custom_prompt = st.text_area(
             "Enter custom system prompt",
             height=150,
             key="custom_prompt_input"
@@ -196,23 +223,25 @@ def add_system_prompt_manager():
             st.session_state.using_custom_prompt = True
             
             # Character name input
-            char_name = st.sidebar.text_input(
-                "Character Name (optional)",
-                key="char_name_custom"
-            )
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                char_name = st.text_input(
+                    "Character Name (optional)",
+                    key="char_name_custom"
+                )
             
             if not char_name:
                 char_name, emoji = get_random_name_and_emoji()
-                st.sidebar.info(f"Using random name: {char_name} {emoji}")
+                st.info(f"Using random name: {char_name} {emoji}")
             else:
                 emoji = "🎭"
             
             st.session_state.character_name = char_name
             st.session_state.character_emoji = emoji
             
-            if st.sidebar.button("Save Character", use_container_width=True):
+            if st.button("Save Character", use_container_width=True, type="primary"):
                 if save_character_to_sheet(char_name, custom_prompt):
-                    st.sidebar.success(f"Character {char_name} saved!")
+                    st.success(f"Character {char_name} saved!")
         else:
             st.session_state.using_custom_prompt = False
             st.session_state.custom_system_prompt = None
@@ -221,7 +250,7 @@ def add_system_prompt_manager():
         characters = load_characters()
         if characters:
             char_names = [char[0] for char in characters]
-            selected_char = st.sidebar.selectbox(
+            selected_char = st.selectbox(
                 "Select Character",
                 char_names,
                 key="saved_char_select"
@@ -235,11 +264,11 @@ def add_system_prompt_manager():
                     st.session_state.character_name = name
                     st.session_state.character_emoji = "🎭"
                     
-                    with st.sidebar.expander("Preview Prompt"):
+                    with st.expander("Preview Prompt"):
                         st.write(prompt)
                     break
         else:
-            st.sidebar.info("No saved characters found")
+            st.info("No saved characters found")
 
 def get_current_system_prompt(default_prompt):
     """Get the current system prompt based on user settings"""

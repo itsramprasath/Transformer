@@ -214,6 +214,8 @@ def handle_chat_input(prompt):
 def render_chat_interface():
     if st.session_state.show_history:
         render_chat_history_viewer()
+    elif st.session_state.get("show_gpt_config", False):
+        render_gpt_config()
     elif st.session_state.client_initialized:
         # Show only the title centered
         st.title(f"Conversation with {st.session_state.client_name}")
@@ -344,6 +346,7 @@ def initialize_session_state():
         'client_initialized': False,
         'needs_update': False,
         'show_history': False,
+        'show_gpt_config': False,
         'current_page': 0
     }
     
