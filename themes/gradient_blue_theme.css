@@ -1,0 +1,39 @@
+/* Gradient Blue Theme */
+.stApp {
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+}
+
+.stButton button {
+    background-color: #4a90e2;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+.stButton button:hover {
+    background-color: #357abd;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Sidebar styling */
+.css-1d391kg {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Text colors */
+.stMarkdown {
+    color: #ffffff;
+}
+
+/* Input fields */
+.stTextInput input {
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid #4a90e2;
+}
+
+/* Selectbox */
+.stSelectbox select {
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid #4a90e2;
+} 
