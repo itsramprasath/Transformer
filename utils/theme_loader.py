@@ -31,7 +31,6 @@ def toggle_theme():
         st.session_state.current_theme = 'gradient_blue_theme'
     else:
         st.session_state.current_theme = 'orange_theme'
-    st.rerun()
 
 def add_theme_toggle():
     """Add a small toggle button for theme switching"""
@@ -43,7 +42,9 @@ def add_theme_toggle():
         col1, col2, col3 = st.columns([1, 0.8, 1])
         with col2:
             current_emoji = "🌅" if st.session_state.current_theme == 'orange_theme' else "🌊"
-            st.button(f"{current_emoji}", key="theme_toggle", on_click=toggle_theme, help="Toggle theme")
+            if st.button(f"{current_emoji}", key="theme_toggle", on_click=toggle_theme, help="Toggle theme"):
+                # The theme will be toggled by the on_click callback
+                pass
     
     # Load the current theme
     load_theme(st.session_state.current_theme) 
