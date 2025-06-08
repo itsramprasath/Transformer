@@ -44,7 +44,8 @@ from utils.theme_loader import add_theme_toggle
 from utils.prompt_manager import (
     initialize_system_prompt_state,
     add_system_prompt_manager,
-    get_current_system_prompt
+    get_current_system_prompt,
+    render_gpt_config
 )
 
 # Initialize theme and prompt settings
