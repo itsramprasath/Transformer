@@ -43,32 +43,26 @@ def add_theme_toggle():
     # Create a small container for the toggle button and character indicator in the sidebar
     with st.sidebar:
         st.write("")  # Add some spacing
-        # Use custom HTML/CSS for better alignment
-        st.markdown(
-            f"""
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                <span style="font-size: 1.2em;">{st.session_state.character_emoji}</span>
-                <span style="flex-grow: 1;">{st.session_state.character_name}</span>
-                <span style="font-size: 1.2em; cursor: pointer;" title="Toggle theme">
-                    {"🌅" if st.session_state.current_theme == 'orange_theme' else "🌊"}
-                </span>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
         
-        # Hidden button for theme toggle functionality
-        if st.button("Toggle Theme", key="theme_toggle", on_click=toggle_theme, help="Toggle theme"):
-            pass
+        # Create columns for layout
+        col1, col2, col3 = st.columns([1, 2, 1])
         
-        # Hide the button using custom CSS
-        st.markdown("""
-            <style>
-            [data-testid="stButton"] {
-                display: none;
-            }
-            </style>
-            """, unsafe_allow_html=True)
+        # Display emoji in first column
+        with col1:
+            st.markdown(f'<p style="font-size: 1.2em; margin: 0; text-align: center;">{st.session_state.character_emoji}</p>', unsafe_allow_html=True)
+        
+        # Display name in middle column
+        with col2:
+            st.markdown(f'<p style="margin: 0; text-align: center;">{st.session_state.character_name}</p>', unsafe_allow_html=True)
+        
+        # Theme toggle in last column
+        with col3:
+            current_emoji = "🌅" if st.session_state.current_theme == 'orange_theme' else "🌊"
+            if st.button(current_emoji, key="theme_toggle", on_click=toggle_theme, help="Toggle theme"):
+                pass
+        
+        # Add some spacing
+        st.write("")
     
     # Load the current theme
     load_theme(st.session_state.current_theme) 

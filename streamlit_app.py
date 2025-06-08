@@ -426,9 +426,11 @@ def render_sidebar():
                 key="new_client_name"
             )
             
+            # Make the Start Conversation button more prominent
             if st.button(
                 "Start Conversation",
                 key="start_conv",
+                type="primary",  # Make it primary color
                 use_container_width=True
             ):
                 handle_start_conversation(new_client_name or selected_client)
@@ -447,21 +449,21 @@ def render_sidebar():
         # Chat History Viewer
         if st.session_state.client_initialized:
             st.subheader("Chat History")
-            view_history = st.button(
+            if st.button(
                 "View Past Conversations",
                 key="view_history",
                 use_container_width=True
-            )
-            if view_history:
+            ):
                 st.session_state.show_history = True
                 st.session_state.current_page = 0
         
         # Action buttons
-        st.button(
-            "Clear Chat",
-            on_click=handle_clear_chat,
-            use_container_width=True
-        )
+        if st.session_state.client_initialized:
+            st.button(
+                "Clear Chat",
+                on_click=handle_clear_chat,
+                use_container_width=True
+            )
         
         st.button(
             "New Client",
