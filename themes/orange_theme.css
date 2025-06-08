@@ -1,9 +1,9 @@
-/* Modern Color Scheme - Coral Gradient Theme */
+/* Modern Sunrise Theme */
 :root {
     --primary-gradient: linear-gradient(135deg, #FF7B89 0%, #FFB26B 100%);
+    --secondary-gradient: linear-gradient(135deg, #FF9B9B 0%, #FFD4B2 100%);
+    --accent-gradient: linear-gradient(135deg, #FF6B6B 0%, #FFA07A 100%);
     --background-gradient: linear-gradient(180deg, #FFE5E5 0%, #FFF0E5 100%);
-    --accent-coral: #FF7B89;
-    --accent-peach: #FFB26B;
     --text-primary: #2D3436;
     --text-secondary: #636E72;
     --white: #FFFFFF;
@@ -88,7 +88,7 @@ div.row-widget.stRadio > div {
     transition: all 0.3s ease !important;
 }
 .stTextInput > div > div:focus-within {
-    border-color: var(--accent-coral) !important;
+    border-color: #FF7B89 !important;
     box-shadow: 0 8px 16px var(--shadow-color) !important;
     transform: translateY(-1px);
 }
@@ -103,7 +103,7 @@ div.row-widget.stRadio > div {
     transition: all 0.3s ease !important;
 }
 .stTextArea > div > div:focus-within {
-    border-color: var(--accent-coral) !important;
+    border-color: #FF7B89 !important;
     box-shadow: 0 8px 16px var(--shadow-color) !important;
     transform: translateY(-1px);
 }
@@ -172,7 +172,7 @@ div.row-widget.stRadio > div {
     transition: all 0.3s ease !important;
 }
 .stChatInputContainer:focus-within {
-    border-color: var(--accent-coral) !important;
+    border-color: #FF7B89 !important;
     box-shadow: 0 8px 16px var(--shadow-color) !important;
     transform: translateY(-1px);
 }
@@ -197,17 +197,6 @@ div.row-widget.stRadio > div {
 /* Additional Modern UI Elements */
 .stSelectbox {
     border-radius: 16px !important;
-}
-.stSelectbox > div > div {
-    background: var(--white) !important;
-    border: 2px solid transparent !important;
-    box-shadow: 0 4px 12px var(--shadow-color) !important;
-    transition: all 0.3s ease !important;
-}
-.stSelectbox > div > div:focus-within {
-    border-color: var(--accent-coral) !important;
-    box-shadow: 0 8px 16px var(--shadow-color) !important;
-    transform: translateY(-1px);
 }
 
 /* Animations */

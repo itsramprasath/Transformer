@@ -40,13 +40,10 @@ from google_services import (
     check_sheet_exists, create_sheet,
     SPREADSHEET_ID
 )
-from utils.theme_loader import add_theme_toggle, load_theme
+from utils.theme_loader import add_theme_toggle
 
 # Initialize and load the theme
 add_theme_toggle()
-
-# Load the orange theme
-load_theme('orange_theme')
 
 def load_chat_history(client_name):
     """Load chat history from Google Sheets and format it for context"""
