@@ -41,9 +41,15 @@ from google_services import (
     SPREADSHEET_ID
 )
 from utils.theme_loader import add_theme_toggle
+from utils.prompt_manager import (
+    initialize_system_prompt_state,
+    add_system_prompt_manager,
+    get_current_system_prompt
+)
 
-# Initialize and load the theme
+# Initialize theme and prompt settings
 add_theme_toggle()
+initialize_system_prompt_state()
 
 def load_chat_history(client_name):
     """Load chat history from Google Sheets and format it for context"""
@@ -85,8 +91,11 @@ def load_chat_history(client_name):
 
 def get_conversation_context(chat_history, current_question):
     """Create a context for the AI by including all past interactions"""
-    # Start with Fred's personality from system_message
-    context = system_message + "\n\n"
+    # Get the current system prompt (default or custom)
+    current_system_prompt = get_current_system_prompt(system_message)
+    
+    # Start with the system prompt
+    context = current_system_prompt + "\n\n"
     
     # Add current client info
     context += f"You are currently chatting with {st.session_state.client_name}.\n"
@@ -458,6 +467,9 @@ def render_sidebar():
             on_click=handle_new_client,
             use_container_width=True
         )
+        
+        # Add system prompt manager
+        add_system_prompt_manager()
         
         # Display session info
         st.markdown("---")
