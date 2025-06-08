@@ -259,11 +259,22 @@ def chat_with_openai(message: str, history: List[tuple]) -> str:
         if not client:
             return "Error: Failed to initialize OpenAI client"
             
+        # Extract system prompt from the message if it's a context
+        system_content = system_message
+        user_message = message
+        
+        if "You are currently chatting with" in message:
+            # This is a context message, extract the system prompt part
+            parts = message.split("\n\nYou are currently chatting with")
+            if len(parts) > 1 and parts[0].strip():  # Only use custom prompt if it's not empty
+                system_content = parts[0]
+            user_message = "You are currently chatting with" + parts[1]
+            
         formatted_messages = [
-            {"role": "system", "content": system_message},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": "When I send a message, give me two different responses in the exact format specified."},
             {"role": "assistant", "content": "Reply 1: I understand that I must provide two different responses to your messages.\nReply 2: Let me confirm that I will always give two distinct replies to what you say."},
-            {"role": "user", "content": "Great! Now respond to this: " + message}
+            {"role": "user", "content": "Great! Now respond to this: " + user_message}
         ]
         
         # Add history if exists
@@ -303,10 +314,21 @@ def chat_with_claude(message: str, history: List[tuple]) -> str:
         if not claude:
             return "Error: Failed to initialize Anthropic client"
             
+        # Extract system prompt from the message if it's a context
+        system_content = system_message
+        user_message = message
+        
+        if "You are currently chatting with" in message:
+            # This is a context message, extract the system prompt part
+            parts = message.split("\n\nYou are currently chatting with")
+            if len(parts) > 1 and parts[0].strip():  # Only use custom prompt if it's not empty
+                system_content = parts[0]
+            user_message = "You are currently chatting with" + parts[1]
+            
         formatted_messages = [
             {"role": "user", "content": "When I send a message, give me two different responses in the exact format specified."},
             {"role": "assistant", "content": "Reply 1: I understand that I must provide two different responses to your messages.\nReply 2: Let me confirm that I will always give two distinct replies to what you say."},
-            {"role": "user", "content": "Great! Now respond to this: " + message}
+            {"role": "user", "content": "Great! Now respond to this: " + user_message}
         ]
         
         # Add history if exists
@@ -321,7 +343,7 @@ def chat_with_claude(message: str, history: List[tuple]) -> str:
         response = claude.messages.create(
             model="claude-3-opus-20240229",
             messages=formatted_messages,
-            system=system_message,
+            system=system_content,
             max_tokens=2000,
             temperature=0.7
         )
