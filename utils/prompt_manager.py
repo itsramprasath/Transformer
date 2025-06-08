@@ -245,12 +245,4 @@ def get_current_system_prompt(default_prompt):
     """Get the current system prompt based on user settings"""
     if st.session_state.using_custom_prompt and st.session_state.custom_system_prompt:
         return st.session_state.custom_system_prompt
-    return default_prompt
-
-def add_character_indicator():
-    """Add character indicator to the top of the sidebar"""
-    col1, col2, col3 = st.columns([0.1, 0.1, 0.8])
-    with col1:
-        st.write(st.session_state.character_emoji)
-    with col2:
-        st.write(st.session_state.character_name) 
+    return default_prompt 
