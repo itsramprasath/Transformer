@@ -44,7 +44,8 @@ from utils.theme_loader import add_theme_toggle
 from utils.prompt_manager import (
     initialize_system_prompt_state,
     add_system_prompt_manager,
-    get_current_system_prompt
+    get_current_system_prompt,
+    add_character_indicator
 )
 
 # Initialize theme and prompt settings
@@ -215,7 +216,12 @@ def render_chat_interface():
     if st.session_state.show_history:
         render_chat_history_viewer()
     elif st.session_state.client_initialized:
-        st.title(f"Conversation with {st.session_state.client_name}")
+        # Add character indicator and title in the same row
+        col1, col2, col3 = st.columns([0.2, 0.6, 0.2])
+        with col1:
+            add_character_indicator()
+        with col2:
+            st.title(f"Conversation with {st.session_state.client_name}")
         
         # Chat container for better performance
         chat_container = st.container()
