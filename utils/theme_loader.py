@@ -21,9 +21,13 @@ def load_theme(theme_name):
         st.error(f"Theme '{theme_name}' not found")
 
 def initialize_theme_state():
-    """Initialize the theme state in session state if it doesn't exist"""
+    """Initialize the theme state and character state in session state if they don't exist"""
     if 'current_theme' not in st.session_state:
         st.session_state.current_theme = 'orange_theme'
+    if 'character_emoji' not in st.session_state:
+        st.session_state.character_emoji = '👨‍💼'
+    if 'character_name' not in st.session_state:
+        st.session_state.character_name = 'Fred'
 
 def toggle_theme():
     """Toggle between orange and gradient blue themes"""
@@ -39,16 +43,32 @@ def add_theme_toggle():
     # Create a small container for the toggle button and character indicator in the sidebar
     with st.sidebar:
         st.write("")  # Add some spacing
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col1:
-            st.write(st.session_state.character_emoji)
-        with col2:
-            st.write(st.session_state.character_name)
-        with col3:
-            current_emoji = "🌅" if st.session_state.current_theme == 'orange_theme' else "🌊"
-            if st.button(f"{current_emoji}", key="theme_toggle", on_click=toggle_theme, help="Toggle theme"):
-                # The theme will be toggled by the on_click callback
-                pass
+        # Use custom HTML/CSS for better alignment
+        st.markdown(
+            f"""
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <span style="font-size: 1.2em;">{st.session_state.character_emoji}</span>
+                <span style="flex-grow: 1;">{st.session_state.character_name}</span>
+                <span style="font-size: 1.2em; cursor: pointer;" title="Toggle theme">
+                    {"🌅" if st.session_state.current_theme == 'orange_theme' else "🌊"}
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # Hidden button for theme toggle functionality
+        if st.button("Toggle Theme", key="theme_toggle", on_click=toggle_theme, help="Toggle theme"):
+            pass
+        
+        # Hide the button using custom CSS
+        st.markdown("""
+            <style>
+            [data-testid="stButton"] {
+                display: none;
+            }
+            </style>
+            """, unsafe_allow_html=True)
     
     # Load the current theme
     load_theme(st.session_state.current_theme) 
