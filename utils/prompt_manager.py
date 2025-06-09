@@ -206,6 +206,15 @@ def render_gpt_config():
                 with st.expander("Preview Prompt"):
                     st.write(content)
                     
+                # Add Load Character button
+                if st.button("Load Character", use_container_width=True, type="primary"):
+                    st.session_state.custom_system_prompt = content
+                    st.session_state.using_custom_prompt = True
+                    st.session_state.character_name = char_name
+                    st.session_state.character_emoji = emoji
+                    st.success(f"Character {char_name} loaded successfully!")
+                    st.rerun()
+                    
             except Exception as e:
                 st.error(f"Error reading file: {str(e)}")
                 st.session_state.using_custom_prompt = False
@@ -257,16 +266,25 @@ def render_gpt_config():
             )
             
             # Find the selected character's prompt
+            selected_prompt = None
             for name, prompt in characters:
                 if name == selected_char:
-                    st.session_state.custom_system_prompt = prompt
-                    st.session_state.using_custom_prompt = True
-                    st.session_state.character_name = name
-                    st.session_state.character_emoji = "🎭"
-                    
-                    with st.expander("Preview Prompt"):
-                        st.write(prompt)
+                    selected_prompt = prompt
                     break
+            
+            if selected_prompt:
+                # Show preview in an expander
+                with st.expander("Preview Prompt"):
+                    st.write(selected_prompt)
+                
+                # Add Load Character button outside the expander
+                if st.button("Load Character", use_container_width=True, type="primary"):
+                    st.session_state.custom_system_prompt = selected_prompt
+                    st.session_state.using_custom_prompt = True
+                    st.session_state.character_name = selected_char
+                    st.session_state.character_emoji = "🎭"
+                    st.success(f"Character {selected_char} loaded successfully!")
+                    st.rerun()
         else:
             st.info("No saved characters found")
 
