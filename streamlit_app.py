@@ -245,86 +245,35 @@ def render_chat_interface():
                         st.markdown(st.session_state.current_response)
                         
                         # Add retry button
-                        col1, col2 = st.columns([0.1, 0.9])
-                        with col1:
-                            retry_key = f"retry_current_{st.session_state.session_id}"
-                            if st.button("🔄", key=retry_key):
-                                # Ask for guidance
-                                guidance = st.text_area(
+                        retry_col1, retry_col2 = st.columns([0.15, 0.85])
+                        with retry_col1:
+                            if st.button("🔄 Retry", use_container_width=True):
+                                st.session_state.retry_clicked = True
+                                st.rerun()
+                        
+                        # Show retry options if button was clicked
+                        if st.session_state.retry_clicked:
+                            with retry_col2:
+                                st.text_area(
                                     "Add guidance for the AI's response (optional):",
-                                    placeholder="Example: Please respond as if you woke up at 10 AM instead of 6 AM",
-                                    key="guidance_input"
+                                    key="guidance_input",
+                                    value=st.session_state.guidance_text,
+                                    on_change=lambda: setattr(st.session_state, 'guidance_text', st.session_state.guidance_input)
                                 )
                                 
-                                if st.button("Regenerate with Guidance", type="primary"):
-                                    # Regenerate response with full context and guidance
-                                    context = get_conversation_context(
-                                        st.session_state.chat_history[:-1], 
-                                        st.session_state.current_question
-                                    )
-                                    
-                                    # Add guidance to context if provided
-                                    if guidance:
-                                        context += f"\n\nGuidance for your response: {guidance}"
-                                    
-                                    new_response = chat(context, [], st.session_state.model_choice)
-                                    
-                                    # Update the last interaction with new response
-                                    reply1, reply2 = parse_replies(new_response)
-                                    st.session_state.chat_history[-1].update({
-                                        "bot_reply": new_response,
-                                        "reply1": reply1,
-                                        "reply2": reply2,
-                                        "final_reply": new_response,
-                                        "summary": summarize_message(new_response)
-                                    })
-                                    
-                                    # Save updated response to sheets
-                                    try:
-                                        sheet_service = get_sheet_service()
-                                        if sheet_service:
-                                            save_interaction_to_sheets(
-                                                sheet_service,
-                                                st.session_state.client_name,
-                                                st.session_state.chat_history[-1]
-                                            )
-                                    except Exception as e:
-                                        st.error(f"Error saving retry to sheets: {e}")
-                                        
-                                    st.session_state.current_response = new_response
-                                    st.rerun()
-                                elif st.button("Regenerate without Guidance", type="secondary"):
-                                    # Original retry logic without guidance
-                                    context = get_conversation_context(
-                                        st.session_state.chat_history[:-1], 
-                                        st.session_state.current_question
-                                    )
-                                    new_response = chat(context, [], st.session_state.model_choice)
-                                    
-                                    # Update the last interaction with new response
-                                    reply1, reply2 = parse_replies(new_response)
-                                    st.session_state.chat_history[-1].update({
-                                        "bot_reply": new_response,
-                                        "reply1": reply1,
-                                        "reply2": reply2,
-                                        "final_reply": new_response,
-                                        "summary": summarize_message(new_response)
-                                    })
-                                    
-                                    # Save updated response to sheets
-                                    try:
-                                        sheet_service = get_sheet_service()
-                                        if sheet_service:
-                                            save_interaction_to_sheets(
-                                                sheet_service,
-                                                st.session_state.client_name,
-                                                st.session_state.chat_history[-1]
-                                            )
-                                    except Exception as e:
-                                        st.error(f"Error saving retry to sheets: {e}")
-                                        
-                                    st.session_state.current_response = new_response
-                                    st.rerun()
+                                button_col1, button_col2 = st.columns(2)
+                                with button_col1:
+                                    if st.button("✨ With Guidance", type="primary", use_container_width=True):
+                                        if st.session_state.guidance_text.strip():
+                                            handle_retry(st.session_state.guidance_text)
+                                            st.rerun()
+                                        else:
+                                            st.warning("Please provide guidance text first.")
+                                
+                                with button_col2:
+                                    if st.button("🎲 Random Variation", type="secondary", use_container_width=True):
+                                        handle_retry()
+                                        st.rerun()
             
             # Save reply interface after the chat messages
             if st.session_state.current_response:
@@ -393,7 +342,10 @@ def initialize_session_state():
         'needs_update': False,
         'show_history': False,
         'show_gpt_config': False,
-        'current_page': 0
+        'current_page': 0,
+        'show_retry_options': False,
+        'retry_clicked': False,
+        'guidance_text': ""
     }
     
     for key, default_value in defaults.items():
@@ -681,6 +633,45 @@ def render_chat_history_viewer():
                 "text/plain",
                 key='download-txt'
             )
+
+def handle_retry(guidance=None):
+    """Handle retry logic with or without guidance"""
+    context = get_conversation_context(
+        st.session_state.chat_history[:-1], 
+        st.session_state.current_question
+    )
+    
+    if guidance:
+        context += f"\n\nGuidance for your response: {guidance}"
+    
+    new_response = chat(context, [], st.session_state.model_choice)
+    
+    # Update the last interaction with new response
+    reply1, reply2 = parse_replies(new_response)
+    st.session_state.chat_history[-1].update({
+        "bot_reply": new_response,
+        "reply1": reply1,
+        "reply2": reply2,
+        "final_reply": new_response,
+        "summary": summarize_message(new_response)
+    })
+    
+    # Save updated response to sheets
+    try:
+        sheet_service = get_sheet_service()
+        if sheet_service:
+            save_interaction_to_sheets(
+                sheet_service,
+                st.session_state.client_name,
+                st.session_state.chat_history[-1]
+            )
+    except Exception as e:
+        st.error(f"Error saving retry to sheets: {e}")
+        
+    st.session_state.current_response = new_response
+    st.session_state.show_retry_options = False
+    st.session_state.retry_clicked = False
+    st.session_state.guidance_text = ""
 
 if __name__ == "__main__":
     main() 
